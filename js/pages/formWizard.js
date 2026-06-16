@@ -1,4 +1,4 @@
-/* SDMIS — shared 4-step Form A / Form B wizard engine */
+/* SDMIS — Form A / Form B data-collection sheet (paper-replica layout) */
 window.SDMIS = window.SDMIS || {};
 
 SDMIS.formWizard = (function () {
@@ -10,6 +10,7 @@ SDMIS.formWizard = (function () {
       status: 'draft', createdBy: createdBy, reviewedBy: null, returnRemark: '',
       createdAt: new Date().toISOString(), convertedFrom: null, enumeratorId: null,
       step1: {
+        surveyDate: new Date().toISOString().slice(0, 10),
         name: '', parentName: '', age: '', gender: '', address: '', gpu: '', ward: '',
         houseNo: '', pin: '', contact: '', altContactName: '', altContactNo: '',
         aadhaar: '', voterId: '', offsprings: [], siblings: [],
@@ -23,44 +24,47 @@ SDMIS.formWizard = (function () {
     };
   }
 
-  // ============ EDITABLE WIZARD ============
+  // ============ EDITABLE SHEET ============
   function open($container, opts) {
     // opts: { record, zone, afterSave (fn), onCancel (fn) }
     var rec = JSON.parse(JSON.stringify(opts.record));
     var zone = opts.zone;
     var survey = rec.surveyId ? store.find('surveys', rec.surveyId) : null;
     var formType = rec.formType;
-    var step = 1;
-    var steps = ['Personal', 'Qualification & Occupation', 'Family', formType === 'A' ? 'Disability (Certified)' : 'Suspected Disability'];
+
+    // ---------- paper-style field helpers ----------
+    // inline "label ____" field that keeps the data-field / .field-error contract used by validation
+    function pf(label, inner, name, o) {
+      o = o || {};
+      var req = o.req ? ' <b class="text-rose-500 font-normal">*</b>' : '';
+      var style = o.basis ? ' style="flex:' + o.basis + '"' : '';
+      var cls = 'pf' + (o.block ? ' pf-block' : '');
+      return '<div class="' + cls + '"' + style + (o.id ? ' id="' + o.id + '"' : '') + ' data-field="' + ui.esc(name || '') + '">' +
+        (label ? '<label class="pf-l">' + label + req + '</label>' : '') +
+        '<div class="pf-in">' + inner + '</div>' +
+        '<p class="field-error hidden text-xs text-rose-600 w-full"></p>' +
+      '</div>';
+    }
+    // character-cell (comb) input — for Contact / Aadhaar / UDID
+    function cells(name, val, count, o) {
+      o = o || {};
+      return '<input type="text" name="' + name + '" value="' + ui.esc(val || '') + '" maxlength="' + count + '" ' +
+        (o.attrs || '') + ' class="cell-input' + (o.upper ? ' cell-upper' : '') + '" style="--cells:' + count + '">';
+    }
 
     function render() {
-      var dots = steps.map(function (label, i) {
-        var n = i + 1;
-        var state = n < step ? 'done' : (n === step ? 'active' : 'todo');
-        var dotCls = state === 'active' ? 'bg-indigo-600 text-white' : state === 'done' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500';
-        var lineCls = n < step ? 'bg-emerald-500' : 'bg-slate-200';
-        return (i > 0 ? '<div class="flex-1 h-0.5 ' + lineCls + ' mx-1"></div>' : '') +
-          '<div class="flex flex-col items-center">' +
-            '<div class="step-dot w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ' + dotCls + '">' + (state === 'done' ? '✓' : n) + '</div>' +
-            '<div class="hidden sm:block text-[11px] mt-1 ' + (n === step ? 'text-indigo-600 font-medium' : 'text-slate-400') + ' text-center max-w-[110px]">' + label + '</div>' +
-          '</div>';
-      }).join('');
-
-      // compact label shown only on mobile (under the dots)
-      var mobileStepLabel = '<div class="sm:hidden text-center text-xs font-medium text-indigo-600 mt-2">Step ' + step + ' of ' + steps.length + ' · ' + ui.esc(steps[step - 1]) + '</div>';
-
       var formBadge = (formType === 'A'
         ? ui.badge('Form A · Certified', 'bg-emerald-100 text-emerald-700')
         : ui.badge('Form B · Suspected', 'bg-amber-100 text-amber-700')) +
         (survey ? ' ' + ui.badge(survey.period, 'bg-indigo-100 text-indigo-700') : '');
 
       var returnedBanner = rec.status === 'returned'
-        ? '<div class="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-2 mb-4">↩ Returned by SWO: ' + ui.esc(rec.returnRemark || 'Please review and correct.') + '</div>'
+        ? '<div class="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-2 mb-4 no-print">↩ Returned by SWO: ' + ui.esc(rec.returnRemark || 'Please review and correct.') + '</div>'
         : '';
 
       var selEnum = (zone && zone.enumerators ? zone.enumerators : []).filter(function (e) { return e.id === rec.enumeratorId; })[0];
       var surveyBanner = (survey || zone)
-        ? '<div class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm rounded-lg px-4 py-2 mb-4">' +
+        ? '<div class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm rounded-lg px-4 py-2 mb-4 no-print">' +
             (survey ? 'Survey: <b>' + ui.esc(survey.name) + '</b> (' + ui.esc(survey.period) + ')' : '') +
             (survey && zone ? ' &nbsp;·&nbsp; ' : '') +
             (zone ? 'Zone: <b>' + ui.esc(zone.name) + '</b>' : '') +
@@ -69,56 +73,51 @@ SDMIS.formWizard = (function () {
         : '';
 
       $container.html(
-        '<div class="max-w-4xl mx-auto">' +
-          '<div class="flex items-center justify-between mb-4">' +
+        '<div class="max-w-3xl mx-auto pb-12">' +
+          '<div class="flex items-center justify-between mb-4 no-print">' +
             '<button id="wiz-back-list" class="text-sm text-slate-500 hover:text-slate-800">&larr; Back to records</button>' +
             formBadge +
           '</div>' +
           returnedBanner +
           surveyBanner +
-          '<div class="bg-white rounded-xl border shadow-sm">' +
-            '<div class="px-3 sm:px-6 pt-5 pb-4 border-b"><div class="flex items-center justify-center">' + dots + '</div>' + mobileStepLabel + '</div>' +
-            '<div id="wiz-body" class="p-4 sm:p-6"></div>' +
-            '<div class="px-4 sm:px-6 py-4 border-t bg-slate-50 rounded-b-xl flex justify-between gap-2">' +
-              '<button id="wiz-prev" class="px-3 sm:px-4 py-2 text-sm rounded-md border border-slate-300 text-slate-600 hover:bg-slate-100 ' + (step === 1 ? 'invisible' : '') + '">&larr; <span class="hidden sm:inline">Previous</span><span class="sm:hidden">Back</span></button>' +
-              '<div class="flex gap-2">' +
-                '<button id="wiz-draft" class="px-3 sm:px-4 py-2 text-sm rounded-md border border-indigo-300 text-indigo-600 hover:bg-indigo-50">Save<span class="hidden sm:inline"> Draft</span></button>' +
-                (step < steps.length
-                  ? '<button id="wiz-next" class="px-4 sm:px-5 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700">Next &rarr;</button>'
-                  : '<button id="wiz-submit" class="px-4 sm:px-5 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">Submit<span class="hidden sm:inline"> for Verification</span></button>') +
-              '</div>' +
+          '<div id="wiz-body">' +
+            '<div class="paper-sheet border shadow-sm">' +
+              '<div class="pf-title">FORM - ' + formType + '</div>' +
+              sectionPersonal() +
+              sectionQual() +
+              sectionFamily() +
+              sectionDisability() +
             '</div>' +
+          '</div>' +
+          '<div class="mt-5 flex justify-between gap-2 no-print">' +
+            '<button id="wiz-draft" class="px-4 py-2 text-sm rounded-md border border-indigo-300 text-indigo-600 hover:bg-indigo-50">Save Draft</button>' +
+            '<button id="wiz-submit" class="px-5 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">Submit for Verification</button>' +
           '</div>' +
         '</div>'
       );
 
-      $('#wiz-body').html(stepHtml(step));
-      bindStep(step);
+      bindStep1(); bindStep2(); bindStep3(); bindStep4();
 
       $('#wiz-back-list').on('click', function () { if (opts.onCancel) opts.onCancel(); });
-      $('#wiz-prev').on('click', function () { collectStep(step); step--; render(); });
-      $('#wiz-next').on('click', function () {
-        collectStep(step);
-        if (validateStep(step)) { step++; render(); }
-        else ui.toast('Please fix the highlighted fields', 'error');
-      });
-      $('#wiz-draft').on('click', function () {
-        collectStep(step); saveRecord('draft');
-      });
+      $('#wiz-draft').on('click', function () { collectAll(); saveRecord('draft'); });
       $('#wiz-submit').on('click', function () {
-        collectStep(step);
-        // validate all steps
-        var bad = 0;
-        for (var s = 1; s <= steps.length; s++) { if (!validateStep(s, true)) bad++; }
-        if (bad) {
-          ui.toast('Some steps have missing required fields', 'error');
-          // jump to first invalid
-          for (var s2 = 1; s2 <= steps.length; s2++) { if (!validateStep(s2, true)) { step = s2; render(); break; } }
+        collectAll();
+        // clear all previous errors once, then validate every section
+        $('#wiz-body .field-error').addClass('hidden');
+        $('#wiz-body input, #wiz-body select, #wiz-body textarea').removeClass('border-rose-400');
+        var ok = true;
+        for (var s = 1; s <= 4; s++) { if (!validateStep(s, false, true)) ok = false; }
+        if (!ok) {
+          ui.toast('Some fields are missing or invalid', 'error');
+          var $first = $('#wiz-body .border-rose-400').first();
+          if ($first.length) $first[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
           return;
         }
         saveRecord('submitted');
       });
     }
+
+    function collectAll() { collectStep(1); collectStep(2); collectStep(3); collectStep(4); }
 
     function saveRecord(status) {
       rec.status = status;
@@ -131,71 +130,74 @@ SDMIS.formWizard = (function () {
       if (opts.afterSave) opts.afterSave(saved);
     }
 
-    // ---------- step HTML (1 = Personal, 2 = Qualification, 3 = Family, 4 = Disability) ----------
-    function stepHtml(n) {
-      if (n === 1) return step1Html();
-      if (n === 2) return step2Html();
-      if (n === 3) return step3Html();
-      return step4Html();
-    }
-
-    function step1Html() {
+    // ---------- (a) Personal information ----------
+    function sectionPersonal() {
       var s = rec.step1;
       var gpuOpts = zone ? zone.gpus : [];
       var wardOpts = zone ? zone.wards : [];
       var enumList = (zone && zone.enumerators) ? zone.enumerators : [];
-      var enumField = enumList.length
-        ? ui.field('Enumerator (who collected this survey)', ui.select('enumeratorId', enumList.map(function (en) { return { value: en.id, label: en.name + (en.awc ? ' — ' + en.awc : '') }; }), rec.enumeratorId || '', { placeholder: 'Select enumerator' }), { required: true, name: 'enumeratorId', cls: 'mb-4 max-w-md' })
-        : '<div class="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded px-3 py-2 mb-4">No enumerators set for this zone yet. Add them via the “Enumerators” button on the records page before submitting.</div>';
-      return '<p class="text-xs text-slate-400 mb-4 uppercase tracking-wide">Personal Information &nbsp;·&nbsp; please use BLOCK LETTERS</p>' +
-        enumField +
-        '<div class="grid md:grid-cols-2 gap-x-5">' +
-          ui.field('Name', ui.text('name', s.name, { attrs: 'style="text-transform:uppercase"' }), { required: true, name: 'name' }) +
-          ui.field("Father's / Mother's Name", ui.text('parentName', s.parentName), { required: true, name: 'parentName' }) +
-          ui.field('Age', ui.text('age', s.age, { type: 'number', attrs: 'min=0 max=120' }), { required: true, name: 'age' }) +
-          ui.field('Gender', ui.select('gender', C.gender, s.gender), { required: true, name: 'gender' }) +
-          ui.field('Address', ui.textarea('address', s.address), { required: true, name: 'address', cls: 'md:col-span-2' }) +
-          ui.field('GPU', gpuOpts.length ? ui.select('gpu', gpuOpts, s.gpu) : ui.text('gpu', s.gpu), { required: true, name: 'gpu' }) +
-          ui.field('Ward Number', wardOpts.length ? ui.select('ward', wardOpts, s.ward) : ui.text('ward', s.ward), { required: true, name: 'ward' }) +
-          ui.field('House Number', ui.text('houseNo', s.houseNo), { name: 'houseNo' }) +
-          ui.field('PIN Code', ui.text('pin', s.pin, { attrs: 'maxlength=6' }), { required: true, name: 'pin' }) +
-          ui.field('Contact Number', ui.text('contact', s.contact, { type: 'tel', attrs: 'maxlength=10' }), { required: true, name: 'contact' }) +
-          ui.field('Aadhaar Number', ui.text('aadhaar', s.aadhaar), { required: true, name: 'aadhaar' }) +
-          ui.field('Additional Contact Person Name', ui.text('altContactName', s.altContactName), { required: true, name: 'altContactName' }) +
-          ui.field('Additional Contact Number', ui.text('altContactNo', s.altContactNo, { type: 'tel', attrs: 'maxlength=10' }), { required: true, name: 'altContactNo' }) +
-          '<div id="voterId-wrap">' + ui.field('Voter ID Number', ui.text('voterId', s.voterId), { name: 'voterId', hint: 'Applicable for age 18 and above' }) + '</div>' +
-          ui.field('Marital Status', ui.select('maritalStatus', C.maritalStatus, s.maritalStatus), { name: 'maritalStatus' }) +
-        '</div>' +
-        // repeatable family members
-        '<div class="grid md:grid-cols-2 gap-5 mt-2">' +
-          repeatBlock('Offsprings', 'offsprings', s.offsprings) +
-          repeatBlock('Siblings', 'siblings', s.siblings) +
-        '</div>' +
-        // residency
-        '<div class="mt-4 border-t pt-4">' +
-          ui.field('Residency Status', ui.select('residency', C.residency, s.residency), { required: true, name: 'residency', cls: 'max-w-xs' }) +
-          '<div id="residency-local" class="grid md:grid-cols-3 gap-x-5">' +
-            ui.field('COI Number', ui.text('coiNo', s.coiNo), { name: 'coiNo' }) +
-            ui.field('RC Number', ui.text('rcNo', s.rcNo), { name: 'rcNo' }) +
-            ui.field('Sikkim Subject Certificate No.', ui.text('sikkimSubjectNo', s.sikkimSubjectNo), { name: 'sikkimSubjectNo' }) +
-            '<p class="text-xs text-slate-400 md:col-span-3 -mt-1">Optional — application may proceed even if these are unavailable.</p>' +
+      var enumInner = enumList.length
+        ? ui.select('enumeratorId', enumList.map(function (en) { return { value: en.id, label: en.name + (en.awc ? ' — ' + en.awc : '') }; }), rec.enumeratorId || '', { placeholder: 'Select enumerator' })
+        : '<span class="text-amber-600 text-xs">No enumerators set for this zone yet — add them via the “Enumerators” button before submitting.</span>';
+
+      return '<div id="sec-1">' +
+        // header: survey date (left) + passport photo box (right)
+        '<div class="pf-head">' +
+          '<div class="pf-head-l">' +
+            pf('Survey Date', ui.text('surveyDate', s.surveyDate, { type: 'date' }), 'surveyDate', { basis: '1 1 100%' }) +
           '</div>' +
-          '<div id="residency-nonlocal">' +
-            ui.field('Identity Proof Number', ui.text('idProofNo', s.idProofNo), { name: 'idProofNo', hint: 'At least one valid identity proof is required for non-local beneficiaries.' }) +
+          '<div class="pf-photo no-print">' +
+            '<div id="photo-preview" class="pf-photo-box">' + (s.photo ? '<img src="' + s.photo + '">' : 'Passport Size Photo') + '</div>' +
+            '<input type="file" accept="image/*" id="photo-input" class="pf-photo-input">' +
           '</div>' +
         '</div>' +
-        // photo
-        '<div class="mt-4 border-t pt-4">' +
-          ui.field('Passport Size Photograph', '<input type="file" accept="image/*" id="photo-input" class="text-sm">', { name: 'photo' }) +
-          '<div id="photo-preview" class="mt-2">' + (s.photo ? '<img src="' + s.photo + '" class="h-24 rounded border">' : '') + '</div>' +
-        '</div>';
+
+        '<div class="pf-sec">Personal information</div>' +
+        pf('Surveyed by (Enumerator)', enumInner, 'enumeratorId', { req: enumList.length > 0, block: true }) +
+
+        '<div class="pf-row">' +
+          pf('1. Name', ui.text('name', s.name, { attrs: 'style="text-transform:uppercase"' }), 'name', { req: true, basis: '3 1 200px' }) +
+          pf('Gender (M/F)', ui.select('gender', C.gender, s.gender), 'gender', { req: true, basis: '1 1 120px' }) +
+          pf('Age', ui.text('age', s.age, { type: 'number', attrs: 'min=0 max=120' }), 'age', { req: true, basis: '0 1 80px' }) +
+        '</div>' +
+        pf("2. Father's / Mother's Name", ui.text('parentName', s.parentName), 'parentName', { req: true, block: true }) +
+        pf('3. Address', ui.text('address', s.address), 'address', { req: true, block: true }) +
+        '<div class="pf-row">' +
+          pf('Ward', wardOpts.length ? ui.select('ward', wardOpts, s.ward) : ui.text('ward', s.ward), 'ward', { req: true, basis: '1 1 110px' }) +
+          pf('House No.', ui.text('houseNo', s.houseNo), 'houseNo', { basis: '1 1 110px' }) +
+          pf('GPU', gpuOpts.length ? ui.select('gpu', gpuOpts, s.gpu) : ui.text('gpu', s.gpu), 'gpu', { req: true, basis: '1 1 150px' }) +
+          pf('Pin number', ui.text('pin', s.pin, { attrs: 'maxlength=6' }), 'pin', { req: true, basis: '1 1 110px' }) +
+        '</div>' +
+
+        pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: true, block: true }) +
+        pf('5. Aadhar number', ui.text('aadhaar', s.aadhaar, { attrs: 'inputmode="numeric" maxlength=12' }), 'aadhaar', { req: true, block: true }) +
+
+        '<div class="pf-row">' +
+          pf('6. Voter ID (EPIC No.)', ui.text('voterId', s.voterId), 'voterId', { basis: '1 1 180px' }) +
+          pf('COI Number', ui.text('coiNo', s.coiNo), 'coiNo', { basis: '1 1 180px' }) +
+        '</div>' +
+
+        '<div class="pf-row">' +
+          pf('Marital Status', ui.select('maritalStatus', C.maritalStatus, s.maritalStatus), 'maritalStatus', { basis: '1 1 150px' }) +
+        '</div>' +
+        '<div class="pf-row">' +
+          pf('Additional Contact Person', ui.text('altContactName', s.altContactName), 'altContactName', { req: true, basis: '2 1 200px' }) +
+          pf('Contact No.', ui.text('altContactNo', s.altContactNo, { type: 'tel', attrs: 'maxlength=10' }), 'altContactNo', { req: true, basis: '1 1 150px' }) +
+        '</div>' +
+
+        // offsprings / siblings (M/F + age, as on the paper form)
+        '<div class="pf-row mt-1">' +
+          repeatBlock('Offsprings (M/F &amp; Age)', 'offsprings', s.offsprings) +
+          repeatBlock('Siblings (M/F &amp; Age)', 'siblings', s.siblings) +
+        '</div>' +
+      '</div>';
     }
 
     function repeatBlock(label, key, items) {
       var rows = (items || []).map(function (it, i) { return repeatRow(key, it, i); }).join('');
-      return '<div class="border rounded-lg p-3 bg-slate-50">' +
-        '<div class="flex items-center justify-between mb-2"><span class="text-sm font-medium text-slate-600">' + label + '</span>' +
-        '<button type="button" class="rep-add text-xs text-indigo-600 hover:underline" data-key="' + key + '">+ Add</button></div>' +
+      return '<div class="rep-block" style="flex:1 1 240px">' +
+        '<div class="flex items-center justify-between mb-1"><span class="pf-l">' + label + '</span>' +
+        '<button type="button" class="rep-add text-xs text-indigo-600 hover:underline no-print" data-key="' + key + '">+ Add</button></div>' +
         '<div class="rep-rows space-y-2" data-key="' + key + '">' + (rows || '<p class="text-xs text-slate-400 rep-empty">None added</p>') + '</div></div>';
     }
     function repeatRow(key, it, i) {
@@ -203,109 +205,125 @@ SDMIS.formWizard = (function () {
       return '<div class="rep-row flex gap-2 items-center" data-key="' + key + '">' +
         '<input type="number" min="0" placeholder="Age" value="' + ui.esc(it.age) + '" class="rep-age ' + ui.inputCls + ' w-20">' +
         ui.select('', C.gender, it.gender).replace('class="', 'class="rep-gender flex-1 ') +
-        '<button type="button" class="rep-del text-rose-500 text-sm px-1">&times;</button>' +
+        '<button type="button" class="rep-del text-rose-500 text-sm px-1 no-print">&times;</button>' +
         '</div>';
     }
 
-    function step2Html() {
+    // ---------- (b) Qualification & occupation ----------
+    function sectionQual() {
       var s = rec.step2;
-      return '<p class="text-xs text-slate-400 mb-4 uppercase tracking-wide">Step 2 · Qualification &amp; Occupation</p>' +
-        '<div class="grid md:grid-cols-2 gap-x-5">' +
-          ui.field('Education Qualification', ui.select('education', C.education, s.education), { required: true, name: 'education' }) +
-          '<div id="education-other-wrap">' + ui.field('Education Remarks', ui.text('educationOther', s.educationOther), { name: 'educationOther' }) + '</div>' +
-          ui.field('Institute / School', ui.text('institute', s.institute), { name: 'institute' }) +
-          ui.field('Occupation', ui.select('occupation', C.occupation, s.occupation), { required: true, name: 'occupation' }) +
-          '<div id="occ-post-wrap">' + ui.field('Post Name', ui.text('postName', s.postName), { name: 'postName' }) + '</div>' +
-          '<div id="occ-emptype-wrap">' + ui.field('Type of Employment', ui.select('employmentType', C.employmentType, s.employmentType), { name: 'employmentType' }) + '</div>' +
-          '<div id="occ-emprem-wrap">' + ui.field('Employment Remarks', ui.text('employmentRemark', s.employmentRemark), { name: 'employmentRemark' }) + '</div>' +
-          '<div id="occ-biz-wrap">' + ui.field('Business Name', ui.text('businessName', s.businessName), { name: 'businessName' }) + '</div>' +
-          ui.field('Cumulative Annual Income', ui.select('annualIncome', C.annualIncome, s.annualIncome), { required: true, name: 'annualIncome' }) +
-        '</div>';
+      return '<div id="sec-2">' +
+        '<div class="pf-sec">(b) Qualification and occupation information</div>' +
+        '<div class="pf-row">' +
+          pf('1. Education', ui.select('education', C.education, s.education), 'education', { req: true, basis: '1 1 160px' }) +
+          pf('Institute / School', ui.text('institute', s.institute), 'institute', { basis: '2 1 200px' }) +
+          pf('Any other', ui.text('educationOther', s.educationOther), 'educationOther', { basis: '1 1 150px', id: 'education-other-wrap' }) +
+        '</div>' +
+        '<div class="pf-row">' +
+          pf('2. Occupation', ui.select('occupation', C.occupation, s.occupation), 'occupation', { req: true, basis: '1 1 170px' }) +
+          pf('Post held', ui.text('postName', s.postName), 'postName', { basis: '1 1 150px', id: 'occ-post-wrap' }) +
+          pf('Nature of appointment', ui.select('employmentType', C.employmentType, s.employmentType), 'employmentType', { basis: '1 1 170px', id: 'occ-emptype-wrap' }) +
+          pf('Any other', ui.text('employmentRemark', s.employmentRemark), 'employmentRemark', { basis: '1 1 150px', id: 'occ-emprem-wrap' }) +
+          pf('Business name', ui.text('businessName', s.businessName), 'businessName', { basis: '1 1 150px', id: 'occ-biz-wrap' }) +
+        '</div>' +
+        '<div class="pf-row">' +
+          pf('3. Cumulative annual income', ui.select('annualIncome', C.annualIncome, s.annualIncome), 'annualIncome', { req: true, basis: '0 1 240px' }) +
+        '</div>' +
+      '</div>';
     }
 
-    function step3Html() {
+    // ---------- (c) Family information ----------
+    function sectionFamily() {
       var s = rec.step3;
-      return '<p class="text-xs text-slate-400 mb-4 uppercase tracking-wide">Step 3 · Family Information</p>' +
-        '<div class="grid md:grid-cols-2 gap-x-5">' +
-          ui.field('House Type', ui.select('houseType', C.houseType, s.houseType), { required: true, name: 'houseType' }) +
-          ui.field('No. of Family Members', ui.text('familyCount', s.familyCount, { type: 'number', attrs: 'min=1' }), { required: true, name: 'familyCount' }) +
-          ui.field('Language Spoken', ui.text('language', s.language), { name: 'language' }) +
+      return '<div id="sec-3">' +
+        '<div class="pf-sec">(c) Family information</div>' +
+        '<div class="pf-row">' +
+          pf('1. House type', ui.select('houseType', C.houseType, s.houseType), 'houseType', { req: true, basis: '2 1 200px' }) +
+          pf('No. of Family Members', ui.text('familyCount', s.familyCount, { type: 'number', attrs: 'min=1' }), 'familyCount', { req: true, basis: '1 1 150px' }) +
         '</div>' +
-        ui.field('Facilities at Home', ui.checkGroup('facilities', C.facilities, s.facilities), { name: 'facilities' }) +
-        '<div id="accessibility-wrap">' + ui.field('Accessibility Facility Details', ui.textarea('accessibilityDetail', s.accessibilityDetail, { placeholder: 'Ramps, handrails, etc.' }), { name: 'accessibilityDetail' }) + '</div>';
+        '<div class="pf-block">' +
+          '<label class="pf-l">2. Facilities at home</label>' +
+          '<div class="mt-1">' + ui.checkGroup('facilities', C.facilities, s.facilities) + '</div>' +
+        '</div>' +
+        pf('Accessibility facility details', ui.textarea('accessibilityDetail', s.accessibilityDetail, { placeholder: 'Ramps, handrails, etc.' }), 'accessibilityDetail', { block: true, id: 'accessibility-wrap' }) +
+        pf('3. Language spoken at Home', ui.text('language', s.language), 'language', { block: true }) +
+      '</div>';
     }
 
-    function step4Html() {
-      if (formType === 'A') return step4AHtml();
-      return step4BHtml();
+    // ---------- (d) Disability information ----------
+    function sectionDisability() {
+      return formType === 'A' ? sectionDisabilityA() : sectionDisabilityB();
     }
 
-    function step4AHtml() {
+    function sectionDisabilityA() {
       var s = rec.step4A;
-      return '<p class="text-xs text-slate-400 mb-4 uppercase tracking-wide">Step 4 · Disability Information (Certified)</p>' +
-        '<div class="grid md:grid-cols-2 gap-x-5">' +
-          ui.field('Disability Type', ui.select('disabilityType', C.disabilityType, s.disabilityType), { required: true, name: 'disabilityType' }) +
-          '<div id="dis-other-wrap">' + ui.field('Specify Other Disability', ui.text('disabilityOther', s.disabilityOther), { name: 'disabilityOther' }) + '</div>' +
-          ui.field('Disability Percentage (%)', ui.text('disabilityPercent', s.disabilityPercent, { type: 'number', attrs: 'min=0 max=100' }), { required: true, name: 'disabilityPercent' }) +
-          ui.field('Disability Certificate Number', ui.text('certNo', s.certNo), { required: true, name: 'certNo' }) +
-          ui.field('UDID Number', ui.text('udid', s.udid, { attrs: 'maxlength=18' }).replace(ui.inputCls, ui.inputCls + ' udid-box'), { name: 'udid', hint: '18-character alphanumeric' }) +
-          ui.field('Certificate Issue Date', ui.text('issueDate', s.issueDate, { type: 'date' }), { name: 'issueDate' }) +
-          ui.field('Place of Issue', ui.text('issuePlace', s.issuePlace), { name: 'issuePlace' }) +
+      return '<div id="sec-4">' +
+        '<div class="pf-sec">(d) Disability Information</div>' +
+        '<div class="pf-row">' +
+          pf('1. Disability type', ui.select('disabilityType', C.disabilityType, s.disabilityType), 'disabilityType', { req: true, basis: '2 1 200px' }) +
+          pf('%', ui.text('disabilityPercent', s.disabilityPercent, { type: 'number', attrs: 'min=0 max=100' }), 'disabilityPercent', { req: true, basis: '0 1 80px' }) +
+          pf('Certificate number', ui.text('certNo', s.certNo), 'certNo', { req: true, basis: '2 1 180px' }) +
+          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { basis: '1 1 150px', id: 'dis-other-wrap' }) +
         '</div>' +
-        ui.field('Upload Disability Certificate', '<input type="file" accept="image/*" id="cert-input" class="text-sm">', { name: 'certImage' }) +
-        '<div id="cert-preview" class="mb-3">' + (s.certImage ? '<img src="' + s.certImage + '" class="h-24 rounded border">' : '') + '</div>' +
-        ui.field('Aids &amp; Appliances Used / Required', ui.checkGroup('aids', C.aids, s.aids), { required: true, name: 'aids' }) +
-        '<div id="aids-other-wrap">' + ui.field('Specify Other Aid/Appliance', ui.text('aidsOther', s.aidsOther), { name: 'aidsOther' }) + '</div>' +
-        commonStep4Html(s);
+        '<div class="pf-row">' +
+          pf('2. UDID number', ui.text('udid', s.udid, { attrs: 'maxlength=18 style="text-transform:uppercase"' }), 'udid', { basis: '1 1 100%' }) +
+        '</div>' +
+        '<div class="pf-row">' +
+          pf('Issue date', ui.text('issueDate', s.issueDate, { type: 'date' }), 'issueDate', { basis: '1 1 160px' }) +
+          pf('Place of issue', ui.text('issuePlace', s.issuePlace), 'issuePlace', { basis: '2 1 200px' }) +
+        '</div>' +
+        '<div class="pf-block no-print">' +
+          '<label class="pf-l">Upload Disability Certificate</label>' +
+          '<div class="mt-1"><input type="file" accept="image/*" id="cert-input" class="text-sm"></div>' +
+          '<div id="cert-preview" class="mt-2">' + (s.certImage ? '<img src="' + s.certImage + '" class="h-24 rounded border">' : '') + '</div>' +
+        '</div>' +
+        aidsBlock(s) +
+        commonDisability(s) +
+      '</div>';
     }
 
-    function step4BHtml() {
+    function sectionDisabilityB() {
       var s = rec.step4B;
-      return '<p class="text-xs text-slate-400 mb-4 uppercase tracking-wide">Step 4 · Suspected Disability Information</p>' +
-        '<div class="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded px-3 py-2 mb-4">Form B captures suspected cases — certificate, UDID and disability percentage are recorded only after certification (during Form B → Form A conversion).</div>' +
-        '<div class="grid md:grid-cols-2 gap-x-5">' +
-          ui.field('Suspected Disability Type', ui.select('suspectedDisabilityType', C.disabilityType, s.suspectedDisabilityType), { required: true, name: 'suspectedDisabilityType' }) +
-          '<div id="dis-other-wrap">' + ui.field('Specify Other Disability', ui.text('disabilityOther', s.disabilityOther), { name: 'disabilityOther' }) + '</div>' +
+      return '<div id="sec-4">' +
+        '<div class="pf-sec">(d) Suspected Disability Information</div>' +
+        '<div class="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded px-3 py-2 mb-3 no-print">Form B captures suspected cases — certificate, UDID and disability percentage are recorded only after certification (during Form B → Form A conversion).</div>' +
+        '<div class="pf-row">' +
+          pf('1. Suspected disability type', ui.select('suspectedDisabilityType', C.disabilityType, s.suspectedDisabilityType), 'suspectedDisabilityType', { req: true, basis: '2 1 220px' }) +
+          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { basis: '1 1 150px', id: 'dis-other-wrap' }) +
         '</div>' +
-        ui.field('Aids &amp; Appliances Used / Required', ui.checkGroup('aids', C.aids, s.aids), { name: 'aids' }) +
-        '<div id="aids-other-wrap">' + ui.field('Specify Other Aid/Appliance', ui.text('aidsOther', s.aidsOther), { name: 'aidsOther' }) + '</div>' +
-        commonStep4Html(s);
+        aidsBlock(s) +
+        commonDisability(s) +
+      '</div>';
     }
 
-    function commonStep4Html(s) {
-      return '<div class="grid md:grid-cols-2 gap-x-5 border-t pt-4 mt-2">' +
-          ui.field('Benefits Availed from Govt. Schemes', ui.text('benefits', s.benefits), { name: 'benefits' }) +
-          ui.field('Pension Receiving Status', ui.select('pensionStatus', C.pensionStatus, s.pensionStatus), { name: 'pensionStatus' }) +
-          '<div id="pension-since-wrap">' + ui.field('Pension Receiving Since', ui.text('pensionSince', s.pensionSince, { placeholder: 'Year' }), { name: 'pensionSince' }) + '</div>' +
-          ui.field('Associated Medical Problems', ui.text('medicalProblems', s.medicalProblems), { name: 'medicalProblems' }) +
-          ui.field('Medical Problems Since', ui.text('medicalSince', s.medicalSince, { placeholder: 'Year' }), { name: 'medicalSince' }) +
-          ui.field('Services Currently Receiving', ui.text('services', s.services), { name: 'services' }) +
-          ui.field('Care Giver Name', ui.text('caregiverName', s.caregiverName), { name: 'caregiverName' }) +
-          ui.field('Relationship with Beneficiary', ui.text('caregiverRelation', s.caregiverRelation), { name: 'caregiverRelation' }) +
+    function aidsBlock(s) {
+      return '<div class="pf-block" data-field="aids">' +
+          '<label class="pf-l">3. Aids &amp; appliance using / required</label>' +
+          '<div class="mt-1">' + ui.checkGroup('aids', C.aids, s.aids) + '</div>' +
+          '<p class="field-error hidden text-xs text-rose-600"></p>' +
+        '</div>' +
+        pf('Specify other aid / appliance', ui.text('aidsOther', s.aidsOther), 'aidsOther', { block: true, id: 'aids-other-wrap' });
+    }
+
+    function commonDisability(s) {
+      return pf('4. Any other benefits', ui.text('benefits', s.benefits), 'benefits', { block: true }) +
+        '<div class="pf-row">' +
+          pf('5. Pension receiving (Yes/No)', ui.select('pensionStatus', C.pensionStatus, s.pensionStatus), 'pensionStatus', { basis: '1 1 200px' }) +
+          pf('Since', ui.text('pensionSince', s.pensionSince, { placeholder: 'Year' }), 'pensionSince', { basis: '1 1 120px', id: 'pension-since-wrap' }) +
+        '</div>' +
+        '<div class="pf-row">' +
+          pf('6. Associated Medical Problem', ui.text('medicalProblems', s.medicalProblems), 'medicalProblems', { basis: '2 1 220px' }) +
+          pf('Since', ui.text('medicalSince', s.medicalSince, { placeholder: 'Year' }), 'medicalSince', { basis: '1 1 120px' }) +
+        '</div>' +
+        pf('7. Services receiving', ui.text('services', s.services), 'services', { block: true }) +
+        '<div class="pf-row">' +
+          pf('8. Care Giver', ui.text('caregiverName', s.caregiverName), 'caregiverName', { basis: '2 1 200px' }) +
+          pf('Relation', ui.text('caregiverRelation', s.caregiverRelation), 'caregiverRelation', { basis: '1 1 150px' }) +
         '</div>';
     }
 
-    // ---------- bind conditional logic per step ----------
-    function bindStep(n) {
-      if (n === 1) bindStep1();
-      if (n === 2) bindStep2();
-      if (n === 3) bindStep3();
-      if (n === 4) bindStep4();
-    }
-
+    // ---------- bind conditional logic ----------
     function bindStep1() {
-      function toggleVoter() {
-        var age = parseInt($('[name=age]').val(), 10);
-        $('#voterId-wrap').toggle(!isNaN(age) && age >= 18);
-      }
-      function toggleResidency() {
-        var r = $('[name=residency]').val();
-        $('#residency-local').toggle(r === 'local');
-        $('#residency-nonlocal').toggle(r === 'nonlocal');
-      }
-      $('[name=age]').on('input', toggleVoter);
-      $('[name=residency]').on('change', toggleResidency);
-      toggleVoter(); toggleResidency();
 
       // repeatable rows
       $('#wiz-body').on('click', '.rep-add', function () {
@@ -373,17 +391,16 @@ SDMIS.formWizard = (function () {
       reader.readAsDataURL(file);
     }
 
-    // ---------- collect current step into rec ----------
+    // ---------- collect each section into rec ----------
     function collectStep(n) {
-      var $body = $('#wiz-body');
+      var $body = $('#sec-' + n);
       if (n === 1) {
         var d = ui.collect($body);
         if (typeof d.enumeratorId !== 'undefined') rec.enumeratorId = d.enumeratorId || null;
-        ['name', 'parentName', 'age', 'gender', 'address', 'gpu', 'ward', 'houseNo', 'pin', 'contact', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiNo', 'rcNo', 'sikkimSubjectNo', 'idProofNo'].forEach(function (k) {
+        ['surveyDate', 'name', 'parentName', 'age', 'gender', 'address', 'gpu', 'ward', 'houseNo', 'pin', 'contact', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiNo', 'rcNo', 'sikkimSubjectNo', 'idProofNo'].forEach(function (k) {
           if (typeof d[k] !== 'undefined') rec.step1[k] = d[k];
         });
         rec.gpu = rec.step1.gpu; rec.ward = rec.step1.ward;
-        // repeatables
         rec.step1.offsprings = collectRepeat('offsprings');
         rec.step1.siblings = collectRepeat('siblings');
       } else if (n === 2) {
@@ -415,16 +432,16 @@ SDMIS.formWizard = (function () {
     }
 
     // ---------- validation ----------
-    function validateStep(n, silent) {
+    function validateStep(n, silent, noClear) {
       var ok = true;
       function fail(name, msg) {
         ok = false;
         if (silent) return;
         var $f = $('#wiz-body [data-field="' + name + '"]');
-        $f.find('.field-error').text(msg || 'Required').removeClass('hidden');
+        $f.find('.field-error').first().text(msg || 'Required').removeClass('hidden');
         $f.find('input, select, textarea').first().addClass('border-rose-400');
       }
-      if (!silent) {
+      if (!silent && !noClear) {
         $('#wiz-body .field-error').addClass('hidden');
         $('#wiz-body input, #wiz-body select, #wiz-body textarea').removeClass('border-rose-400');
       }
@@ -435,7 +452,6 @@ SDMIS.formWizard = (function () {
         ['name', 'parentName', 'age', 'gender', 'address', 'gpu', 'ward', 'pin', 'contact', 'aadhaar', 'altContactName', 'altContactNo'].forEach(function (k) {
           if (!String(s[k] || '').trim()) fail(k);
         });
-        if (s.residency === 'nonlocal' && !String(s.idProofNo || '').trim()) fail('idProofNo', 'At least one ID proof required for non-local');
         if (s.pin && !/^\d{6}$/.test(s.pin)) fail('pin', 'PIN must be 6 digits');
       } else if (n === 2) {
         var s2 = rec.step2;
@@ -496,6 +512,7 @@ SDMIS.formWizard = (function () {
     var html =
       section('Survey Cover',
         row('Survey', survey ? survey.name + ' (' + survey.period + ')' : '—') +
+        row('Survey Date', s1.surveyDate) +
         row('Zone', zone ? zone.name + ' (' + zone.code + ')' : '—') +
         '<div class="mt-2 text-xs font-semibold text-slate-500 uppercase">Enumerator</div>' +
         row('Name', en.name) + row('AWC', en.awc) + row('Project', en.project) + row('District', en.district) + row('Contact', en.contact)

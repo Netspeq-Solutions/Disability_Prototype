@@ -9,6 +9,158 @@ html, body { height: 100%; }
   text-transform: uppercase;
 }
 
+/* ===== Paper-replica data-collection sheet (Form A / Form B) ===== */
+.paper-sheet {
+  background: #fff;
+  color: #1e293b;
+  font-family: Georgia, "Times New Roman", serif;
+  border-radius: 4px;
+  padding: 1rem;          /* mobile-first: tight padding */
+  line-height: 1.8;
+}
+@media (min-width: 640px) {
+  .paper-sheet { padding: 2.25rem 2.5rem; }
+}
+
+.pf-title {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+@media (min-width: 640px) {
+  .pf-title { font-size: 1.05rem; }
+}
+
+/* section heading */
+.pf-sec {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 1.4rem 0 0.8rem;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #cbd5e1;
+}
+@media (min-width: 640px) {
+  .pf-sec { font-size: 0.95rem; margin: 1.75rem 0 1rem; }
+}
+
+/* header: survey date (left) + passport photo box (right) */
+.pf-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.pf-head-l { flex: 1 1 0; min-width: 0; }
+.pf-photo { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; overflow: hidden; max-width: 5.5rem; }
+.pf-photo-box {
+  width: 5rem; height: 5.5rem;
+  border: 1px solid #475569;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; font-size: 0.55rem; color: #64748b; padding: 2px; overflow: hidden;
+}
+@media (min-width: 640px) {
+  .pf-photo { max-width: 7rem; }
+  .pf-photo-box { width: 6rem; height: 7rem; font-size: 0.62rem; }
+}
+.pf-photo-box img { width: 100%; height: 100%; object-fit: cover; }
+.pf-photo-input { font-size: 0.6rem; width: 5rem; max-width: 5rem; }
+
+/* field rows — mobile: single column, sm+: row layout */
+.pf-row { display: flex; flex-wrap: wrap; gap: 0; }
+.pf {
+  position: relative;
+  display: flex; align-items: baseline; gap: 0.4rem;
+  /* mobile: always full width, ignore any inline flex basis */
+  flex: 0 0 100% !important;
+  width: 100%;
+  margin-bottom: 1.35rem;
+}
+@media (min-width: 640px) {
+  .pf-row { gap: 0 1.6rem; align-items: baseline; }
+  /* at sm+, restore the per-field flex basis set via inline style */
+  .pf { flex: 1 1 auto !important; width: auto; margin-bottom: 1.5rem; }
+}
+
+.pf-block { position: relative; width: 100%; margin-bottom: 1.35rem; }
+@media (min-width: 640px) { .pf-block { margin-bottom: 1.5rem; } }
+
+.pf-l { font-size: 0.8rem; color: #334155; white-space: nowrap; flex-shrink: 0; }
+@media (min-width: 640px) { .pf-l { font-size: 0.82rem; } }
+.pf-in { flex: 1 1 60px; min-width: 60px; }
+
+/* errors: absolutely positioned so they don't push layout */
+.paper-sheet .field-error {
+  position: absolute;
+  top: 100%; left: 0;
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* turn the standard inputs/selects into fill-in lines inside the sheet */
+.paper-sheet input[type="text"],
+.paper-sheet input[type="tel"],
+.paper-sheet input[type="number"],
+.paper-sheet input[type="date"],
+.paper-sheet select {
+  border: 0;
+  border-bottom: 1px solid #475569;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 4px;
+  box-shadow: none;
+}
+.paper-sheet textarea {
+  border: 1px solid #475569;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+}
+.paper-sheet input:focus,
+.paper-sheet select:focus,
+.paper-sheet textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+/* keep validation highlight visible over the paper styling
+   (background-color, not the background shorthand, so the comb cells survive) */
+.paper-sheet input.border-rose-400,
+.paper-sheet select.border-rose-400,
+.paper-sheet textarea.border-rose-400 {
+  border-color: #e11d48;
+  background-color: #fff1f2;
+}
+
+/* character-cell ("comb") inputs — Contact / Aadhaar / UDID */
+.cell-input {
+  --cells: 10;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid #475569 !important;
+  border-radius: 4px;
+  background: transparent;
+  background-image: repeating-linear-gradient(to right, #475569 0, #475569 1px, transparent 1px, transparent 2rem);
+  width: calc(var(--cells) * 2rem);
+  max-width: 100%;
+  letter-spacing: calc(2rem - 1ch);
+  text-indent: calc((2rem - 1ch) / 2);
+}
+.cell-input.cell-upper { text-transform: uppercase; }
+.cell-input:focus { outline: none; box-shadow: 0 0 0 2px #c7d2fe; }
+/* the comb input carries !important on its border, so re-assert the error border */
+.cell-input.border-rose-400 { border-color: #e11d48 !important; background-color: #fff7f8; }
+
+/* repeatable offspring/sibling blocks on the sheet */
+.rep-block {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.75rem;
+  /* mobile: full width like .pf */
+  flex: 0 0 100% !important; width: 100%; margin-bottom: 1rem;
+}
+@media (min-width: 640px) {
+  .rep-block { flex: 1 1 240px !important; width: auto; }
+}
+
 /* stepper */
 .step-dot { transition: all .2s ease; }
 
