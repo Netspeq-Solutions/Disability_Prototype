@@ -1,0 +1,226 @@
+/* SDMIS — SWO: verification queue, approve/return, Form B → Form A conversion */
+window.SDMIS = window.SDMIS || {};
+
+SDMIS.router.register('swo', {
+  roles: ['swo'],
+  title: 'Verification',
+  render: function ($c, params) {
+    var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
+    var auth = SDMIS.auth;
+    var user = auth.current();
+    var zone = auth.currentZone();
+    var PER = 10;
+
+    if (params[0] === 'review' && params[1]) {
+      var rec = store.find('beneficiaries', params[1]);
+      if (rec) return review(rec);
+    }
+    return list();
+
+    function zoneRecords() {
+      return store.where('beneficiaries', function (b) { return zone && b.zoneId === zone.id; })
+        .sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+    }
+    function surveyName(id) { var s = id ? store.find('surveys', id) : null; return s ? s.period : '—'; }
+
+    function list() {
+      var recs = zoneRecords();
+      var counts = {
+        submitted: recs.filter(function (r) { return r.status === 'submitted'; }).length,
+        approved: recs.filter(function (r) { return r.status === 'approved'; }).length,
+        returned: recs.filter(function (r) { return r.status === 'returned'; }).length
+      };
+      var surveys = store.all('surveys').slice().sort(function (a, b) { return (b.period || '').localeCompare(a.period || ''); });
+
+      var statusTab = 'submitted', page = 1;
+
+      $c.html(
+        '<div class="grid grid-cols-3 gap-4 mb-5">' +
+          card('Pending Verification', counts.submitted, 'bg-amber-50 text-amber-700') +
+          card('Approved', counts.approved, 'bg-emerald-50 text-emerald-700') +
+          card('Returned', counts.returned, 'bg-rose-50 text-rose-700') +
+        '</div>' +
+        '<div class="bg-white rounded-xl border shadow-sm">' +
+          '<div class="border-b px-3 flex gap-1 overflow-x-auto">' +
+            tabBtn('submitted', 'Pending') + tabBtn('approved', 'Approved') + tabBtn('returned', 'Returned') + tabBtn('all', 'All') +
+          '</div>' +
+          '<div class="p-3 border-b flex flex-wrap gap-2 items-center">' +
+            '<input id="swo-search" placeholder="Search beneficiary..." class="' + ui.inputCls + ' w-full sm:max-w-xs">' +
+            ui.select('swo-form', [{ value: 'A', label: 'Form A' }, { value: 'B', label: 'Form B' }], '', { placeholder: 'All forms' }).replace(ui.inputCls, ui.inputCls + ' w-full sm:w-36') +
+            ui.select('swo-survey', surveys.map(function (s) { return { value: s.id, label: s.period }; }), '', { placeholder: 'All surveys' }).replace(ui.inputCls, ui.inputCls + ' w-full sm:w-40') +
+          '</div>' +
+          '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
+            '<th class="px-3 py-2">Beneficiary</th><th class="px-3 py-2">Form</th><th class="px-3 py-2">Survey</th><th class="px-3 py-2">GPU · Ward</th><th class="px-3 py-2">Age/Gender</th><th class="px-3 py-2">Status</th><th></th>' +
+          '</tr></thead><tbody id="swo-rows"></tbody></table></div>' +
+          '<div id="swo-pager"></div>' +
+        '</div>'
+      );
+
+      function draw() {
+        var q = ($('#swo-search').val() || '').toLowerCase();
+        var formF = $('#swo-form').val();
+        var surveyF = $('#swo-survey').val();
+        var filtered = recs.filter(function (r) {
+          if (statusTab !== 'all' && r.status !== statusTab) return false;
+          if (formF && r.formType !== formF) return false;
+          if (surveyF && r.surveyId !== surveyF) return false;
+          if (q && (r.step1.name || '').toLowerCase().indexOf(q) === -1) return false;
+          return true;
+        });
+        var meta = ui.pageSlice(filtered, page, PER);
+        page = meta.page;
+        var rows = meta.items.map(function (r) {
+          var convertBtn = (r.status === 'approved' && r.formType === 'B')
+            ? '<button class="rec-convert text-purple-600 text-sm hover:underline ml-2" data-id="' + r.id + '">Convert → A</button>' : '';
+          return '<tr class="border-b hover:bg-slate-50">' +
+            '<td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(r.step1.name || '(no name)') + '</td>' +
+            '<td class="px-3 py-2">' + (r.formType === 'A' ? ui.badge('A', 'bg-emerald-100 text-emerald-700') : ui.badge('B', 'bg-amber-100 text-amber-700')) + '</td>' +
+            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc(surveyName(r.surveyId)) + '</td>' +
+            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc(r.gpu || '—') + ' · ' + ui.esc(r.ward || '—') + '</td>' +
+            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc((r.step1.age || '—') + '/' + (r.step1.gender || '—')) + '</td>' +
+            '<td class="px-3 py-2">' + ui.statusBadge(r.status) + '</td>' +
+            '<td class="px-3 py-2 text-right whitespace-nowrap">' +
+              '<button class="rec-review text-indigo-600 text-sm hover:underline" data-id="' + r.id + '">Review</button>' + convertBtn +
+            '</td></tr>';
+        }).join('');
+        $('#swo-rows').html(rows || '<tr><td colspan="7">' + ui.emptyState('No records match.') + '</td></tr>');
+        ui.renderPager($('#swo-pager'), meta, function (p) { page = p; draw(); });
+      }
+
+      $('.swo-tab').on('click', function () {
+        statusTab = $(this).data('tab'); page = 1;
+        $('.swo-tab').removeClass('border-indigo-600 text-indigo-600').addClass('border-transparent text-slate-500');
+        $(this).removeClass('border-transparent text-slate-500').addClass('border-indigo-600 text-indigo-600');
+        draw();
+      });
+      $('#swo-search').on('input', function () { page = 1; draw(); });
+      $('#swo-form, #swo-survey').on('change', function () { page = 1; draw(); });
+      $c.on('click', '.rec-review', function () { SDMIS.router.go('#/swo/review/' + $(this).data('id')); });
+      $c.on('click', '.rec-convert', function () { convertModal($(this).data('id')); });
+      draw();
+    }
+
+    function tabBtn(id, label) {
+      var active = id === 'submitted';
+      return '<button class="swo-tab px-4 py-2.5 text-sm font-medium border-b-2 ' +
+        (active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700') +
+        '" data-tab="' + id + '">' + label + '</button>';
+    }
+
+    function card(label, val, cls) {
+      return '<div class="bg-white border rounded-xl shadow-sm p-4"><div class="text-2xl font-bold text-slate-800">' + val + '</div>' +
+        '<div class="text-xs ' + cls + ' inline-block px-2 py-0.5 rounded mt-1">' + label + '</div></div>';
+    }
+
+    // ---------- review detail ----------
+    function review(rec) {
+      var inspector = store.find('officials', rec.createdBy);
+      var actionBar = rec.status === 'submitted'
+        ? '<div class="flex gap-2">' +
+            '<button id="btn-return" class="px-4 py-2 text-sm rounded-md border border-rose-300 text-rose-600 hover:bg-rose-50">↩ Return for Correction</button>' +
+            '<button id="btn-approve" class="px-4 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">✓ Approve</button>' +
+          '</div>'
+        : (rec.status === 'approved' && rec.formType === 'B'
+            ? '<button id="btn-convert" class="px-4 py-2 text-sm rounded-md bg-purple-600 text-white hover:bg-purple-700">Convert → Form A</button>'
+            : '');
+
+      $c.html(
+        '<div class="max-w-3xl mx-auto">' +
+          '<div class="flex items-center justify-between mb-4">' +
+            '<button id="back" class="text-sm text-slate-500 hover:text-slate-800">&larr; Back to queue</button>' +
+            ui.statusBadge(rec.status) +
+          '</div>' +
+          '<div class="bg-white rounded-xl border shadow-sm">' +
+            '<div class="px-6 py-4 border-b flex items-center justify-between">' +
+              '<div><h2 class="text-lg font-semibold text-slate-800">' + ui.esc(rec.step1.name || 'Unnamed') + '</h2>' +
+              '<p class="text-xs text-slate-400">Entered by ' + ui.esc(inspector ? inspector.name : '—') + ' · ' + (rec.formType === 'A' ? 'Form A (Certified)' : 'Form B (Suspected)') + '</p></div>' +
+              actionBar +
+            '</div>' +
+            '<div class="p-6">' + SDMIS.formWizard.readOnlyHtml(rec) + '</div>' +
+          '</div></div>'
+      );
+
+      $('#back').on('click', function () { SDMIS.router.go('#/swo'); });
+
+      $('#btn-approve').on('click', function () {
+        store.update('beneficiaries', rec.id, { status: 'approved', reviewedBy: user.id });
+        store.audit('approve', rec.id, 'Approved by SWO');
+        ui.toast('Record approved', 'success');
+        SDMIS.router.go('#/swo');
+      });
+
+      $('#btn-return').on('click', function () {
+        ui.modal({
+          title: 'Return for Correction', confirmText: 'Return',
+          bodyHtml: ui.field('Remarks to Inspector', ui.textarea('remark', '', { rows: 3, placeholder: 'Describe what needs correction...' }), { required: true, name: 'remark' }),
+          onConfirm: function () {
+            var remark = $('#modal-body [name=remark]').val().trim();
+            if (!remark) { ui.toast('Please enter remarks', 'error'); return false; }
+            store.update('beneficiaries', rec.id, { status: 'returned', reviewedBy: user.id, returnRemark: remark });
+            store.audit('return', rec.id, remark);
+            ui.toast('Record returned to inspector', 'warn');
+            SDMIS.router.go('#/swo');
+          }
+        });
+      });
+
+      $('#btn-convert').on('click', function () { convertModal(rec.id); });
+    }
+
+    // ---------- Form B → Form A conversion ----------
+    function convertModal(id) {
+      var rec = store.find('beneficiaries', id);
+      if (!rec || rec.formType !== 'B') return;
+      var body =
+        '<p class="text-sm text-slate-500 mb-3">Enter the certified disability details. Steps 1–3 (Personal, Qualification, Family) will be carried over automatically.</p>' +
+        ui.field('Disability Type', ui.select('disabilityType', C.disabilityType, rec.step4B.suspectedDisabilityType), { required: true, name: 'disabilityType' }) +
+        ui.field('Disability Percentage (%)', ui.text('disabilityPercent', '', { type: 'number', attrs: 'min=0 max=100' }), { required: true, name: 'disabilityPercent' }) +
+        ui.field('Disability Certificate Number', ui.text('certNo', ''), { required: true, name: 'certNo' }) +
+        ui.field('UDID Number', ui.text('udid', '', { attrs: 'maxlength=18' }), { name: 'udid', hint: '18-character alphanumeric (optional now)' }) +
+        ui.field('Certificate Issue Date', ui.text('issueDate', '', { type: 'date' }), { name: 'issueDate' }) +
+        ui.field('Place of Issue', ui.text('issuePlace', ''), { name: 'issuePlace' });
+
+      ui.modal({
+        title: 'Convert Form B → Form A', confirmText: 'Convert', wide: true, bodyHtml: body,
+        onConfirm: function () {
+          var d = ui.collect($('#modal-body'));
+          if (!d.disabilityType || !String(d.disabilityPercent).trim() || !d.certNo.trim()) {
+            ui.toast('Disability Type, Percentage and Certificate No. are required', 'error');
+            return false;
+          }
+          if (d.udid && d.udid.length !== 18) { ui.toast('UDID must be 18 characters', 'error'); return false; }
+
+          // build the new Form A record, retaining steps 1-3
+          var newRec = JSON.parse(JSON.stringify(rec));
+          newRec.id = store.uid('ben');
+          newRec.formType = 'A';
+          newRec.convertedFrom = rec.id;
+          newRec.status = 'approved';
+          newRec.reviewedBy = user.id;
+          newRec.createdAt = new Date().toISOString();
+          newRec.step4B = null;
+          newRec.step4A = {
+            disabilityType: d.disabilityType, disabilityOther: '',
+            disabilityPercent: d.disabilityPercent, certNo: d.certNo, certImage: '',
+            udid: d.udid || '', issueDate: d.issueDate || '', issuePlace: d.issuePlace || '',
+            aids: (rec.step4B && rec.step4B.aids) || [], aidsOther: (rec.step4B && rec.step4B.aidsOther) || '',
+            benefits: (rec.step4B && rec.step4B.benefits) || '',
+            pensionStatus: (rec.step4B && rec.step4B.pensionStatus) || '',
+            pensionSince: (rec.step4B && rec.step4B.pensionSince) || '',
+            medicalProblems: (rec.step4B && rec.step4B.medicalProblems) || '',
+            medicalSince: (rec.step4B && rec.step4B.medicalSince) || '',
+            services: (rec.step4B && rec.step4B.services) || '',
+            caregiverName: (rec.step4B && rec.step4B.caregiverName) || '',
+            caregiverRelation: (rec.step4B && rec.step4B.caregiverRelation) || ''
+          };
+          store.insert('beneficiaries', newRec);
+          // remove the old Form B from active records
+          store.remove('beneficiaries', rec.id);
+          store.audit('convert', newRec.id, 'Converted from Form B (' + rec.id + ') to Form A');
+          ui.toast('Converted to Form A — now a Certified Disability Case', 'success');
+          SDMIS.router.go('#/swo');
+        }
+      });
+    }
+  }
+});

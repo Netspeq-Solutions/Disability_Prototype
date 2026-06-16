@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDMIS — State Disability Management Information System</title>
+
+  <!-- Tailwind CSS (CDN, no build step) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+  <!-- App root (router renders here) -->
+  <div id="app"></div>
+
+  <!-- Toast host -->
+  <div id="toast-host" class="fixed bottom-4 right-4 z-[60] flex flex-col items-end"></div>
+
+  <!-- Core -->
+  <script src="js/constants.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/seed.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/router.js"></script>
+
+  <!-- Pages -->
+  <script src="js/pages/login.js"></script>
+  <script src="js/pages/admin.js"></script>
+  <script src="js/pages/formWizard.js"></script>
+  <script src="js/pages/inspector.js"></script>
+  <script src="js/pages/swo.js"></script>
+  <script src="js/pages/hq.js"></script>
+  <script src="js/pages/reports.js"></script>
+
+  <!-- Bootstrap -->
+  <script>
+    $(function () {
+      SDMIS.seed.run();      // seed once
+      SDMIS.router.start();  // start hash router
+    });
+  </script>
+</body>
+</html>

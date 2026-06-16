@@ -1,0 +1,29 @@
+/* SDMIS — small custom overrides on top of Tailwind */
+
+html, body { height: 100%; }
+
+/* UDID boxed input look */
+.udid-box {
+  letter-spacing: 0.45em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+
+/* stepper */
+.step-dot { transition: all .2s ease; }
+
+/* simple horizontal bar for stat breakdowns */
+.stat-bar { transition: width .4s ease; }
+
+/* print: show only the printable report area */
+@media print {
+  body * { visibility: hidden; }
+  #print-area, #print-area * { visibility: visible; }
+  #print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 16px; }
+  .no-print { display: none !important; }
+}
+
+/* thin scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
