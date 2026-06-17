@@ -10,6 +10,7 @@ SDMIS.router.register('swo', {
     var user = auth.current();
     var zone = auth.currentZone();
     var PER = 10;
+    var ENABLE_CONVERT = false; // Form B → Form A conversion is hidden for now
 
     if (params[0] === 'review' && params[1]) {
       var rec = store.find('beneficiaries', params[1]);
@@ -70,7 +71,8 @@ SDMIS.router.register('swo', {
         var meta = ui.pageSlice(filtered, page, PER);
         page = meta.page;
         var rows = meta.items.map(function (r) {
-          var convertBtn = (r.status === 'approved' && r.formType === 'B')
+          // Convert → Form A is hidden for now (set ENABLE_CONVERT to re-enable)
+          var convertBtn = (ENABLE_CONVERT && r.status === 'approved' && r.formType === 'B')
             ? '<button class="rec-convert text-purple-600 text-sm hover:underline ml-2" data-id="' + r.id + '">Convert → A</button>' : '';
           return '<tr class="border-b hover:bg-slate-50">' +
             '<td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(r.step1.name || '(no name)') + '</td>' +
@@ -120,25 +122,54 @@ SDMIS.router.register('swo', {
             '<button id="btn-return" class="px-4 py-2 text-sm rounded-md border border-rose-300 text-rose-600 hover:bg-rose-50">↩ Return for Correction</button>' +
             '<button id="btn-approve" class="px-4 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">✓ Approve</button>' +
           '</div>'
-        : (rec.status === 'approved' && rec.formType === 'B'
+        : (ENABLE_CONVERT && rec.status === 'approved' && rec.formType === 'B'
             ? '<button id="btn-convert" class="px-4 py-2 text-sm rounded-md bg-purple-600 text-white hover:bg-purple-700">Convert → Form A</button>'
             : '');
 
+      var docCount = SDMIS.formWizard.recordImages(rec).length;
+
       $c.html(
-        '<div class="max-w-3xl mx-auto">' +
+        '<div class="max-w-5xl mx-auto">' +
           '<div class="flex items-center justify-between mb-4">' +
             '<button id="back" class="text-sm text-slate-500 hover:text-slate-800">&larr; Back to queue</button>' +
             ui.statusBadge(rec.status) +
           '</div>' +
           '<div class="bg-white rounded-xl border shadow-sm">' +
-            '<div class="px-6 py-4 border-b flex items-center justify-between">' +
+            '<div class="px-4 sm:px-6 py-4 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">' +
               '<div><h2 class="text-lg font-semibold text-slate-800">' + ui.esc(rec.step1.name || 'Unnamed') + '</h2>' +
               '<p class="text-xs text-slate-400">Entered by ' + ui.esc(inspector ? inspector.name : '—') + ' · ' + (rec.formType === 'A' ? 'Form A (Certified)' : 'Form B (Suspected)') + '</p></div>' +
               actionBar +
             '</div>' +
-            '<div class="p-6">' + SDMIS.formWizard.readOnlyHtml(rec) + '</div>' +
+            // mobile-only segmented toggle (side-by-side panes on lg+)
+            '<div class="lg:hidden flex border-b bg-slate-50 p-1 gap-1">' +
+              '<button id="rv-tab-data" class="rv-tab flex-1 text-sm py-1.5 rounded-md bg-white shadow-sm font-medium text-indigo-600">Details</button>' +
+              '<button id="rv-tab-docs" class="rv-tab flex-1 text-sm py-1.5 rounded-md text-slate-500">Documents' + (docCount ? ' (' + docCount + ')' : '') + '</button>' +
+            '</div>' +
+            '<div class="grid lg:grid-cols-2 lg:divide-x">' +
+              '<div id="pane-data" class="p-4 sm:p-6 lg:block">' + SDMIS.formWizard.readOnlyHtml(rec) + '</div>' +
+              '<div id="pane-docs" class="hidden lg:block p-4 sm:p-6 bg-slate-50/60">' +
+                '<h4 class="text-sm font-semibold text-indigo-600 mb-3 uppercase tracking-wide flex items-center justify-between gap-2">' +
+                  '<span>Uploaded Documents</span>' +
+                  (docCount ? '<span class="text-[11px] font-normal text-slate-400 normal-case tracking-normal">Tap an image to enlarge</span>' : '') +
+                '</h4>' +
+                SDMIS.formWizard.documentsHtml(rec) +
+              '</div>' +
+            '</div>' +
           '</div></div>'
       );
+
+      function setReviewTab(which) {
+        var data = which === 'data';
+        $('#pane-data').toggleClass('hidden', !data);
+        $('#pane-docs').toggleClass('hidden', data);
+        $('#rv-tab-data').toggleClass('bg-white shadow-sm font-medium text-indigo-600', data).toggleClass('text-slate-500', !data);
+        $('#rv-tab-docs').toggleClass('bg-white shadow-sm font-medium text-indigo-600', !data).toggleClass('text-slate-500', data);
+      }
+      $('#rv-tab-data').on('click', function () { setReviewTab('data'); });
+      $('#rv-tab-docs').on('click', function () { setReviewTab('docs'); });
+      $('#pane-docs').on('click', '.doc-thumb', function () {
+        ui.lightbox(SDMIS.formWizard.recordImages(rec), parseInt($(this).data('idx'), 10) || 0);
+      });
 
       $('#back').on('click', function () { SDMIS.router.go('#/swo'); });
 
