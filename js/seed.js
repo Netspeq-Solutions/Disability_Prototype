@@ -31,6 +31,134 @@ SDMIS.seed = (function () {
 
   var DISTRICTS = ['East Sikkim', 'West Sikkim', 'North Sikkim', 'South Sikkim'];
 
+  // ===== Demo document images (generated as inline SVG data-URIs) =====
+  // Keeps the prototype self-contained (no binary assets) while giving the
+  // SWO side-by-side review real-looking scanned forms / photos / certificates.
+  function xmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+  function clip(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+  function svgUri(svg) { return 'data:image/svg+xml,' + encodeURIComponent(svg); }
+  function initials(name) {
+    var p = (name || '').trim().split(/\s+/);
+    return (((p[0] || '')[0] || '?') + ((p[1] || '')[0] || '')).toUpperCase();
+  }
+  var AVATAR_BG = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+  function colorFor(s) {
+    var h = 0; s = s || '';
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return AVATAR_BG[h % AVATAR_BG.length];
+  }
+
+  function mockPhoto(name) {
+    var bg = colorFor(name);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="280" viewBox="0 0 220 280">' +
+      '<rect width="220" height="280" fill="#f1f5f9"/>' +
+      '<rect x="6" y="6" width="208" height="268" fill="#ffffff" stroke="#94a3b8"/>' +
+      '<rect x="14" y="14" width="192" height="252" fill="' + bg + '" opacity="0.10"/>' +
+      '<circle cx="110" cy="112" r="50" fill="' + bg + '"/>' +
+      '<path d="M44 256 q66 -78 132 0 z" fill="' + bg + '"/>' +
+      '<text x="110" y="130" font-family="Arial, sans-serif" font-size="46" font-weight="700" fill="#ffffff" text-anchor="middle">' + xmlEsc(initials(name)) + '</text>' +
+      '</svg>';
+    return svgUri(svg);
+  }
+
+  function formField(y, label, val) {
+    return '<text x="22" y="' + y + '" font-family="Georgia, serif" font-size="11" fill="#1e293b">' + xmlEsc(label) + '</text>' +
+      '<line x1="118" y1="' + (y + 3) + '" x2="280" y2="' + (y + 3) + '" stroke="#cbd5e1"/>' +
+      '<text x="122" y="' + y + '" font-family="\'Segoe Script\', \'Comic Sans MS\', cursive" font-size="12" fill="#1d4ed8">' + xmlEsc(clip(val, 22)) + '</text>';
+  }
+
+  function formShell(rec, page, total, inner) {
+    var ft = rec.formType;
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400">' +
+      '<rect width="300" height="400" fill="#ffffff"/>' +
+      '<rect x="0.5" y="0.5" width="299" height="399" fill="none" stroke="#cbd5e1"/>' +
+      '<rect x="0" y="0" width="300" height="50" fill="#1e3a8a"/>' +
+      '<text x="150" y="21" font-family="Georgia, serif" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">GOVERNMENT OF SIKKIM</text>' +
+      '<text x="150" y="37" font-family="Georgia, serif" font-size="8.5" fill="#c7d2fe" text-anchor="middle">Social Welfare Department · PwD Survey</text>' +
+      '<text x="22" y="72" font-family="Georgia, serif" font-size="13" font-weight="700" fill="#0f172a">FORM - ' + xmlEsc(ft) + '</text>' +
+      '<text x="278" y="72" font-family="Georgia, serif" font-size="9" fill="#64748b" text-anchor="end">Page ' + page + ' of ' + total + '</text>' +
+      '<line x1="22" y1="80" x2="278" y2="80" stroke="#94a3b8"/>' +
+      inner +
+      '<text x="150" y="388" font-family="Georgia, serif" font-size="8" fill="#94a3b8" text-anchor="middle">Scanned copy · for verification only</text>' +
+      '</svg>';
+  }
+
+  function mockFormPage1(rec) {
+    var s = rec.step1;
+    var y = 104, step = 30, inner = '';
+    inner += '<text x="22" y="' + (y - 8) + '" font-family="Georgia, serif" font-size="10" font-weight="700" fill="#1e3a8a">(a) Personal Information</text>';
+    inner += formField(y, 'Name', s.name); y += step;
+    inner += formField(y, "Father/Mother", s.parentName); y += step;
+    inner += formField(y, 'Age / Gender', s.age + ' / ' + s.gender); y += step;
+    inner += formField(y, 'Address', s.address); y += step;
+    inner += formField(y, 'GPU / Ward', s.gpu + ' / ' + s.ward); y += step;
+    inner += formField(y, 'Contact', s.contact); y += step;
+    inner += formField(y, 'Aadhaar', s.aadhaar); y += step;
+    return svgUri(formShell(rec, 1, 2, inner));
+  }
+
+  function mockFormPage2(rec) {
+    var y = 104, step = 30, inner = '';
+    inner += '<text x="22" y="' + (y - 8) + '" font-family="Georgia, serif" font-size="10" font-weight="700" fill="#1e3a8a">(d) Disability Information</text>';
+    if (rec.formType === 'A') {
+      var a = rec.step4A || {};
+      inner += formField(y, 'Disability', a.disabilityType); y += step;
+      inner += formField(y, 'Percentage', a.disabilityPercent + ' %'); y += step;
+      inner += formField(y, 'Certificate', a.certNo); y += step;
+      inner += formField(y, 'UDID No.', a.udid); y += step;
+      inner += formField(y, 'Aids', (a.aids || []).join(', ') || 'None'); y += step;
+      inner += formField(y, 'Pension', a.pensionStatus); y += step;
+      inner += formField(y, 'Care giver', a.caregiverName); y += step;
+    } else {
+      var b = rec.step4B || {};
+      inner += formField(y, 'Suspected', b.suspectedDisabilityType); y += step;
+      inner += formField(y, 'Aids', (b.aids || []).join(', ') || 'None'); y += step;
+      inner += formField(y, 'Medical', b.medicalProblems || 'None'); y += step;
+      inner += formField(y, 'Care giver', b.caregiverName); y += step;
+      inner += '<text x="22" y="' + (y + 14) + '" font-family="Georgia, serif" font-size="9" fill="#b45309">Suspected case — pending certification.</text>';
+    }
+    return svgUri(formShell(rec, 2, 2, inner));
+  }
+
+  function mockCertificate(rec) {
+    var a = rec.step4A || {};
+    var s = rec.step1;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400">' +
+      '<rect width="300" height="400" fill="#ffffff"/>' +
+      '<rect x="8" y="8" width="284" height="384" fill="none" stroke="#15803d" stroke-width="3"/>' +
+      '<rect x="14" y="14" width="272" height="372" fill="none" stroke="#86efac"/>' +
+      '<circle cx="150" cy="58" r="20" fill="none" stroke="#15803d" stroke-width="2"/>' +
+      '<text x="150" y="64" font-family="Georgia, serif" font-size="16" fill="#15803d" text-anchor="middle">⚕</text>' +
+      '<text x="150" y="100" font-family="Georgia, serif" font-size="14" font-weight="700" fill="#14532d" text-anchor="middle">DISABILITY CERTIFICATE</text>' +
+      '<text x="150" y="118" font-family="Georgia, serif" font-size="8.5" fill="#3f6212" text-anchor="middle">(Under the RPwD Act, 2016)</text>' +
+      '<line x1="40" y1="132" x2="260" y2="132" stroke="#86efac"/>' +
+      formField(168, 'Name', s.name) +
+      formField(198, 'Disability', a.disabilityType) +
+      formField(228, 'Percentage', a.disabilityPercent + ' %') +
+      formField(258, 'Certificate', a.certNo) +
+      formField(288, 'UDID No.', a.udid) +
+      formField(318, 'Issued at', a.issuePlace) +
+      '<circle cx="80" cy="358" r="26" fill="none" stroke="#dc2626" stroke-width="1.5" opacity="0.8"/>' +
+      '<text x="80" y="354" font-family="Arial, sans-serif" font-size="6" fill="#dc2626" text-anchor="middle" opacity="0.85">MEDICAL BOARD</text>' +
+      '<text x="80" y="364" font-family="Arial, sans-serif" font-size="6" fill="#dc2626" text-anchor="middle" opacity="0.85">SIKKIM</text>' +
+      '<text x="250" y="356" font-family="\'Segoe Script\', cursive" font-size="13" fill="#1d4ed8" text-anchor="middle">Dr. Authority</text>' +
+      '<line x1="200" y1="362" x2="284" y2="362" stroke="#94a3b8"/>' +
+      '<text x="242" y="374" font-family="Georgia, serif" font-size="8" fill="#64748b" text-anchor="middle">Chief Medical Officer</text>' +
+      '</svg>';
+    return svgUri(svg);
+  }
+
+  // Attach a set of demo documents to a record (scanned form pages + photo + certificate).
+  function attachDemoImages(rec) {
+    rec.formImages = [mockFormPage1(rec), mockFormPage2(rec)];
+    rec.step1.photo = mockPhoto(rec.step1.name);
+    if (rec.formType === 'A' && rec.step4A) rec.step4A.certImage = mockCertificate(rec);
+  }
+
   // A zone has several Anganwadi-worker enumerators (one per AWC); a record picks one
   function buildEnumerators(zoneId, name, i) {
     var count = 2 + (i % 2); // 2 or 3 per zone
@@ -210,6 +338,7 @@ SDMIS.seed = (function () {
       };
     }
 
+    attachDemoImages(rec);
     return rec;
   }
 
@@ -281,6 +410,10 @@ SDMIS.seed = (function () {
         var z = (db.zones || []).filter(function (x) { return x.id === r.zoneId; })[0];
         if (z && z.enumerators && z.enumerators.length) { r.enumeratorId = z.enumerators[0].id; changed = true; }
       }
+    });
+    // Backfill demo documents for records seeded before attachments existed
+    (db.beneficiaries || []).forEach(function (r) {
+      if (!r.formImages || !r.formImages.length) { attachDemoImages(r); changed = true; }
     });
     if (changed) { store.write(db); console.log('SDMIS migrated to multi-enumerator schema'); }
   }

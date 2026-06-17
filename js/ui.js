@@ -58,6 +58,57 @@ SDMIS.ui = (function () {
   }
   function closeModal() { $('#modal-overlay').remove(); }
 
+  // ---- lightbox (full-screen image viewer with prev/next + tap-to-zoom) ----
+  function lightbox(images, startIndex) {
+    images = (images || []).filter(function (i) { return i && i.src; });
+    if (!images.length) return;
+    var idx = Math.min(Math.max(0, startIndex || 0), images.length - 1);
+    var zoomed = false;
+    closeLightbox();
+    var multi = images.length > 1;
+    var $o = $(
+      '<div id="lightbox-overlay" class="fixed inset-0 bg-black/90 z-[70] flex flex-col select-none">' +
+        '<div class="flex items-center justify-between px-4 py-3 text-white text-sm shrink-0">' +
+          '<span id="lb-cap" class="truncate pr-3"></span>' +
+          '<div class="flex items-center gap-4 whitespace-nowrap">' +
+            '<span id="lb-count" class="text-white/60"></span>' +
+            '<button id="lb-close" class="text-3xl leading-none hover:text-rose-300">&times;</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="lb-stage" class="flex-1 overflow-auto flex items-center justify-center px-2 pb-4">' +
+          '<img id="lb-img" class="max-h-full max-w-full object-contain transition-transform duration-150" style="cursor:zoom-in">' +
+        '</div>' +
+        (multi ? '<button id="lb-prev" class="absolute left-2 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-11 h-11 text-2xl leading-none">&lsaquo;</button>' : '') +
+        (multi ? '<button id="lb-next" class="absolute right-2 top-1/2 -translate-y-1/2 text-white bg-black/40 hover:bg-black/70 rounded-full w-11 h-11 text-2xl leading-none">&rsaquo;</button>' : '') +
+      '</div>'
+    );
+    $('body').append($o);
+    function show() {
+      var im = images[idx];
+      zoomed = false;
+      $('#lb-img').css({ transform: 'scale(1)', cursor: 'zoom-in' }).attr('src', im.src);
+      $('#lb-cap').text(im.label || '');
+      $('#lb-count').text((idx + 1) + ' / ' + images.length);
+    }
+    function go(d) { idx = (idx + d + images.length) % images.length; show(); }
+    $('#lb-close').on('click', closeLightbox);
+    $o.on('click', function (e) { if (e.target === this || e.target.id === 'lb-stage') closeLightbox(); });
+    $('#lb-prev').on('click', function (e) { e.stopPropagation(); go(-1); });
+    $('#lb-next').on('click', function (e) { e.stopPropagation(); go(1); });
+    $('#lb-img').on('click', function (e) {
+      e.stopPropagation();
+      zoomed = !zoomed;
+      $(this).css({ transform: zoomed ? 'scale(2)' : 'scale(1)', cursor: zoomed ? 'zoom-out' : 'zoom-in' });
+    });
+    $(document).on('keydown.lightbox', function (e) {
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === 'ArrowRight') go(1);
+    });
+    show();
+  }
+  function closeLightbox() { $('#lightbox-overlay').remove(); $(document).off('keydown.lightbox'); }
+
   // ---- form field builders ----
   function field(label, inner, opts) {
     opts = opts || {};
@@ -186,6 +237,7 @@ SDMIS.ui = (function () {
 
   return {
     esc: esc, toast: toast, modal: modal, closeModal: closeModal,
+    lightbox: lightbox, closeLightbox: closeLightbox,
     field: field, text: text, textarea: textarea, select: select,
     checkGroup: checkGroup, badge: badge, statusBadge: statusBadge,
     collect: collect, emptyState: emptyState, inputCls: inputCls,
