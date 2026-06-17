@@ -82,9 +82,16 @@ SDMIS.router.register('inspector', {
               (rec.formType === 'A' ? ui.badge('Form A', 'bg-emerald-100 text-emerald-700') : ui.badge('Form B', 'bg-amber-100 text-amber-700')) +
             '</div>' +
             SDMIS.formWizard.readOnlyHtml(rec) +
+            '<div class="mt-5 pt-4 border-t">' +
+              '<h4 class="text-sm font-semibold text-indigo-600 mb-3 uppercase tracking-wide">Uploaded Documents</h4>' +
+              '<div id="view-docs">' + SDMIS.formWizard.documentsHtml(rec) + '</div>' +
+            '</div>' +
           '</div></div>'
       );
       $('#back').on('click', function () { SDMIS.router.go('#/inspector'); });
+      $('#view-docs').on('click', '.doc-thumb', function () {
+        ui.lightbox(SDMIS.formWizard.recordImages(rec), parseInt($(this).data('idx'), 10) || 0);
+      });
     }
 
     function list() {

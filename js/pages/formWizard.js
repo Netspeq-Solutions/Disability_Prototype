@@ -9,6 +9,7 @@ SDMIS.formWizard = (function () {
       formType: formType, surveyId: surveyId || null, zoneId: zoneId, gpu: '', ward: '',
       status: 'draft', createdBy: createdBy, reviewedBy: null, returnRemark: '',
       createdAt: new Date().toISOString(), convertedFrom: null, enumeratorId: null,
+      formImages: [],
       step1: {
         surveyDate: new Date().toISOString().slice(0, 10),
         name: '', parentName: '', age: '', gender: '', address: '', gpu: '', ward: '',
@@ -62,15 +63,22 @@ SDMIS.formWizard = (function () {
         ? '<div class="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-2 mb-4 no-print">↩ Returned by SWO: ' + ui.esc(rec.returnRemark || 'Please review and correct.') + '</div>'
         : '';
 
-      var selEnum = (zone && zone.enumerators ? zone.enumerators : []).filter(function (e) { return e.id === rec.enumeratorId; })[0];
       var surveyBanner = (survey || zone)
         ? '<div class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm rounded-lg px-4 py-2 mb-4 no-print">' +
             (survey ? 'Survey: <b>' + ui.esc(survey.name) + '</b> (' + ui.esc(survey.period) + ')' : '') +
             (survey && zone ? ' &nbsp;·&nbsp; ' : '') +
             (zone ? 'Zone: <b>' + ui.esc(zone.name) + '</b>' : '') +
-            (selEnum ? ' &nbsp;·&nbsp; Enumerator: <b>' + ui.esc(selEnum.name) + '</b>' : '') +
           '</div>'
         : '';
+
+      // Enumerator selector lives OUTSIDE the paper form (it's survey metadata, not part of the sheet)
+      var enumList = (zone && zone.enumerators) ? zone.enumerators : [];
+      var enumInner = enumList.length
+        ? ui.select('enumeratorId', enumList.map(function (en) { return { value: en.id, label: en.name + (en.awc ? ' — ' + en.awc : '') }; }), rec.enumeratorId || '', { placeholder: 'Select enumerator' })
+        : '<span class="text-amber-600 text-xs">No enumerators set for this zone yet — add them via the “Enumerators” button before submitting.</span>';
+      var enumCard = '<div id="sec-enum" class="bg-white border rounded-xl shadow-sm p-4 mb-4 no-print">' +
+        ui.field('Surveyed by (Enumerator)', enumInner, { required: enumList.length > 0, name: 'enumeratorId', cls: 'mb-0' }) +
+        '</div>';
 
       $container.html(
         '<div class="max-w-3xl mx-auto pb-12">' +
@@ -81,12 +89,14 @@ SDMIS.formWizard = (function () {
           returnedBanner +
           surveyBanner +
           '<div id="wiz-body">' +
+            enumCard +
             '<div class="paper-sheet border shadow-sm">' +
               '<div class="pf-title">FORM - ' + formType + '</div>' +
               sectionPersonal() +
               sectionQual() +
               sectionFamily() +
               sectionDisability() +
+              sectionAttachments() +
             '</div>' +
           '</div>' +
           '<div class="mt-5 flex justify-between gap-2 no-print">' +
@@ -96,7 +106,7 @@ SDMIS.formWizard = (function () {
         '</div>'
       );
 
-      bindStep1(); bindStep2(); bindStep3(); bindStep4();
+      bindStep1(); bindStep2(); bindStep3(); bindStep4(); bindAttachments();
 
       $('#wiz-back-list').on('click', function () { if (opts.onCancel) opts.onCancel(); });
       $('#wiz-draft').on('click', function () { collectAll(); saveRecord('draft'); });
@@ -135,10 +145,6 @@ SDMIS.formWizard = (function () {
       var s = rec.step1;
       var gpuOpts = zone ? zone.gpus : [];
       var wardOpts = zone ? zone.wards : [];
-      var enumList = (zone && zone.enumerators) ? zone.enumerators : [];
-      var enumInner = enumList.length
-        ? ui.select('enumeratorId', enumList.map(function (en) { return { value: en.id, label: en.name + (en.awc ? ' — ' + en.awc : '') }; }), rec.enumeratorId || '', { placeholder: 'Select enumerator' })
-        : '<span class="text-amber-600 text-xs">No enumerators set for this zone yet — add them via the “Enumerators” button before submitting.</span>';
 
       return '<div id="sec-1">' +
         // header: survey date (left) + passport photo box (right)
@@ -153,7 +159,6 @@ SDMIS.formWizard = (function () {
         '</div>' +
 
         '<div class="pf-sec">Personal information</div>' +
-        pf('Surveyed by (Enumerator)', enumInner, 'enumeratorId', { req: enumList.length > 0, block: true }) +
 
         '<div class="pf-row">' +
           pf('1. Name', ui.text('name', s.name, { attrs: 'style="text-transform:uppercase"' }), 'name', { req: true, basis: '3 1 200px' }) +
@@ -322,6 +327,54 @@ SDMIS.formWizard = (function () {
         '</div>';
     }
 
+    // ---------- (e) Attachments — scanned / photographed paper form ----------
+    function sectionAttachments() {
+      return '<div id="sec-att" class="no-print">' +
+        '<div class="pf-sec">Attachments — Scanned / Photographed Form</div>' +
+        '<p class="text-xs text-slate-500 mb-2" style="line-height:1.5">Upload clear photos or scans of the filled paper <b>Form ' + formType + '</b> and any supporting documents. You can add multiple pages.</p>' +
+        '<label for="form-upload" class="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-indigo-300 text-indigo-600 hover:bg-indigo-50 cursor-pointer">' +
+          '<span class="text-base leading-none">＋</span> Add form page(s)' +
+        '</label>' +
+        '<input type="file" accept="image/*" id="form-upload" multiple class="hidden">' +
+        '<div id="form-uploads" class="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-3"></div>' +
+      '</div>';
+    }
+
+    function renderFormUploads() {
+      var imgs = rec.formImages || [];
+      $('#form-uploads').html(imgs.length
+        ? imgs.map(function (src, i) {
+            return '<div class="relative group rounded-lg border border-slate-200 overflow-hidden bg-slate-50">' +
+              '<img src="' + src + '" class="w-full h-24 object-cover">' +
+              '<span class="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[10px] px-1.5 py-0.5 truncate">Page ' + (i + 1) + '</span>' +
+              '<button type="button" class="form-upload-del absolute top-1 right-1 bg-black/60 hover:bg-rose-600 text-white rounded-full w-6 h-6 text-sm leading-none" data-i="' + i + '">&times;</button>' +
+            '</div>';
+          }).join('')
+        : '<p class="text-xs text-slate-400 col-span-full">No form pages uploaded yet.</p>');
+    }
+
+    function bindAttachments() {
+      renderFormUploads();
+      $('#form-upload').on('change', function () {
+        var files = Array.prototype.slice.call(this.files || []);
+        files.forEach(function (file) {
+          if (!/^image\//.test(file.type)) return;
+          var reader = new FileReader();
+          reader.onload = function (e) {
+            rec.formImages = rec.formImages || [];
+            rec.formImages.push(e.target.result);
+            renderFormUploads();
+          };
+          reader.readAsDataURL(file);
+        });
+        this.value = '';
+      });
+      $('#form-uploads').on('click', '.form-upload-del', function () {
+        rec.formImages.splice($(this).data('i'), 1);
+        renderFormUploads();
+      });
+    }
+
     // ---------- bind conditional logic ----------
     function bindStep1() {
 
@@ -396,7 +449,8 @@ SDMIS.formWizard = (function () {
       var $body = $('#sec-' + n);
       if (n === 1) {
         var d = ui.collect($body);
-        if (typeof d.enumeratorId !== 'undefined') rec.enumeratorId = d.enumeratorId || null;
+        var $enum = $('#wiz-body [name="enumeratorId"]');
+        if ($enum.length) rec.enumeratorId = $enum.val() || null;
         ['surveyDate', 'name', 'parentName', 'age', 'gender', 'address', 'gpu', 'ward', 'houseNo', 'pin', 'contact', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiNo', 'rcNo', 'sikkimSubjectNo', 'idProofNo'].forEach(function (k) {
           if (typeof d[k] !== 'undefined') rec.step1[k] = d[k];
         });
@@ -491,6 +545,51 @@ SDMIS.formWizard = (function () {
     render();
   }
 
+  // ============ DOCUMENTS (uploaded images for side-by-side review) ============
+  // Gather every image attached to a record, in review order.
+  function recordImages(rec) {
+    var imgs = [];
+    (rec.formImages || []).forEach(function (src, i) {
+      if (src) imgs.push({ src: src, label: 'Scanned Form — page ' + (i + 1) });
+    });
+    if (rec.step1 && rec.step1.photo) imgs.push({ src: rec.step1.photo, label: 'Passport Photo' });
+    if (rec.formType === 'A' && rec.step4A && rec.step4A.certImage) imgs.push({ src: rec.step4A.certImage, label: 'Disability Certificate' });
+    return imgs;
+  }
+
+  // Each .doc-thumb carries data-idx for opening the lightbox.
+  // Scanned form pages render large & full-width (so they're readable side-by-side
+  // with the data); the passport photo / certificate stay as compact thumbnails.
+  function documentsHtml(rec) {
+    var imgs = recordImages(rec);
+    if (!imgs.length) {
+      return '<div class="text-center text-sm text-slate-400 border border-dashed border-slate-300 rounded-lg py-10 px-4">No documents or images were uploaded with this record.</div>';
+    }
+    var forms = [], extras = [];
+    imgs.forEach(function (im, i) { im._idx = i; (/^Scanned Form/.test(im.label) ? forms : extras).push(im); });
+
+    var html = '';
+    if (forms.length) {
+      html += '<div class="space-y-3">' + forms.map(function (im) {
+        return '<button type="button" class="doc-thumb group block w-full text-left" data-idx="' + im._idx + '">' +
+          '<div class="relative rounded-lg border border-slate-200 overflow-hidden bg-white shadow-sm">' +
+            '<img src="' + im.src + '" class="w-full h-auto block group-hover:opacity-95 transition">' +
+            '<span class="absolute top-2 right-2 bg-black/60 text-white text-[11px] px-2 py-0.5 rounded">' + ui.esc(im.label) + ' · tap to zoom</span>' +
+          '</div></button>';
+      }).join('') + '</div>';
+    }
+    if (extras.length) {
+      html += '<div class="grid grid-cols-2 gap-3' + (forms.length ? ' mt-3' : '') + '">' + extras.map(function (im) {
+        return '<button type="button" class="doc-thumb group block text-left" data-idx="' + im._idx + '">' +
+          '<div class="relative rounded-lg border border-slate-200 overflow-hidden bg-slate-100" style="aspect-ratio:3/4">' +
+            '<img src="' + im.src + '" class="w-full h-full object-cover group-hover:opacity-90 transition">' +
+            '<span class="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[11px] px-2 py-1 truncate">' + ui.esc(im.label) + '</span>' +
+          '</div></button>';
+      }).join('') + '</div>';
+    }
+    return html;
+  }
+
   // ============ READ-ONLY RENDER (for SWO review / detail) ============
   function readOnlyHtml(rec) {
     var zone = store.find('zones', rec.zoneId);
@@ -563,5 +662,5 @@ SDMIS.formWizard = (function () {
     return html;
   }
 
-  return { open: open, readOnlyHtml: readOnlyHtml, blankRecord: blankRecord };
+  return { open: open, readOnlyHtml: readOnlyHtml, blankRecord: blankRecord, recordImages: recordImages, documentsHtml: documentsHtml };
 })();
