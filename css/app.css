@@ -151,6 +151,35 @@ html, body { height: 100%; }
 /* the comb input carries !important on its border, so re-assert the error border */
 .cell-input.border-rose-400 { border-color: #e11d48 !important; background-color: #fff7f8; }
 
+/* Inside the paper sheet the base `.paper-sheet input` rule uses the `background`
+   shorthand, which would wipe the comb gradient (the cell dividers). Re-assert the
+   cell borders here with higher specificity so the UDID boxes stay visible. */
+.paper-sheet input.cell-input {
+  padding: 0;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  background-color: transparent;
+  background-image: repeating-linear-gradient(to right, #475569 0, #475569 1px, transparent 1px, transparent 2rem);
+}
+.paper-sheet input.cell-input:focus {
+  border-color: #4f46e5;
+  background-color: #eef2ff;
+}
+/* segmented digit boxes (UDID etc.) — discrete single-char inputs, perfectly aligned cells.
+   Scoped under .paper-sheet so they beat the base `.paper-sheet input` rules (border:0 / background). */
+.digit-grid { display: flex; flex-wrap: wrap; gap: 4px; max-width: 100%; }
+.paper-sheet input.digit-cell {
+  width: 1.7rem; height: 2.1rem; flex: 0 0 auto;
+  padding: 0; text-align: center;
+  border: 1px solid #475569; border-radius: 4px;
+  background-color: transparent; background-image: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem;
+}
+.paper-sheet input.digit-cell:focus {
+  outline: none; border-color: #4f46e5; background-color: #eef2ff; box-shadow: 0 0 0 2px #c7d2fe;
+}
+.paper-sheet input.digit-cell.border-rose-400 { border-color: #e11d48; background-color: #fff7f8; }
+
 /* repeatable offspring/sibling blocks on the sheet */
 .rep-block {
   background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.75rem;
