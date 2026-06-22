@@ -10,7 +10,10 @@ SDMIS.router = (function () {
   // nav menus per role
   var NAV = {
     admin: [
-      { route: 'admin', icon: '⚙️', label: 'Configuration' }
+      { route: 'admin', icon: '🗓️', label: 'Surveys' },
+      { route: 'admin/zones', icon: '🗺️', label: 'Zones' },
+      { route: 'admin/officials', icon: '👥', label: 'Officials' },
+      { route: 'admin/masters', icon: '🗂️', label: 'Masters' }
     ],
     inspector: [
       { route: 'inspector', icon: '📝', label: 'My Records' }
@@ -20,7 +23,11 @@ SDMIS.router = (function () {
     ],
     hq: [
       { route: 'hq', icon: '📊', label: 'Dashboard' },
-      { route: 'reports', icon: '📑', label: 'Reports' }
+      { route: 'reports', icon: '📑', label: 'Reports' },
+      { route: 'reports/caregiver', icon: '👪', label: 'Caregiver Coverage' },
+      { route: 'reports/salaried', icon: '💰', label: 'Salaried Caregivers' },
+      { route: 'reports/pension', icon: '🏦', label: 'Pension Enrolment' },
+      { route: 'reports/services', icon: '🩺', label: 'Services Utilisation' }
     ]
   };
 
@@ -35,11 +42,22 @@ SDMIS.router = (function () {
 
   function go(hash) { location.hash = hash; }
 
-  function shell(user, activeRoute, contentRenderer) {
+  function shell(user, parsed, contentRenderer) {
     var C = SDMIS.constants;
     var zone = auth.currentZone();
-    var navItems = (NAV[user.role] || []).map(function (n) {
-      var active = n.route === activeRoute;
+    var activeRoute = parsed.name;
+    // full path incl. first param, e.g. 'admin/masters' — lets nested nav items highlight correctly
+    var activePath = parsed.name + (parsed.params && parsed.params.length ? '/' + parsed.params[0] : '');
+    var navList = NAV[user.role] || [];
+    var navRoutes = navList.map(function (n) { return n.route; });
+    function isActive(n) {
+      if (n.route.indexOf('/') > -1) return n.route === activePath;      // nested item: exact path match
+      if (parsed.name !== n.route) return false;                          // single-segment item
+      // defer to a more specific sibling when the current path matches one (e.g. admin vs admin/masters)
+      return navRoutes.indexOf(activePath) === -1 || activePath === n.route;
+    }
+    var navItems = navList.map(function (n) {
+      var active = isActive(n);
       return '<a href="#/' + n.route + '" class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium ' +
         (active ? 'bg-indigo-600 text-white shadow' : 'text-slate-300 hover:bg-slate-700/60') + '">' +
         '<span>' + n.icon + '</span>' + n.label + '</a>';
@@ -132,7 +150,7 @@ SDMIS.router = (function () {
       return;
     }
 
-    shell(user, parsed.name, function ($content) {
+    shell(user, parsed, function ($content) {
       route.render($content, parsed.params);
     });
   }

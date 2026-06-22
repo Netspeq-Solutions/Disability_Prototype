@@ -161,6 +161,48 @@ html, body { height: 100%; }
   .rep-block { flex: 1 1 240px !important; width: auto; }
 }
 
+/* radio pills — Yes/No, address type, etc. (radio styled as pill buttons) */
+.radio-pill { cursor: pointer; }
+.radio-pill > span {
+  display: inline-block;
+  padding: 0.25rem 0.85rem;
+  font-size: 0.8rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  background: #fff;
+  color: #475569;
+  transition: all .15s ease;
+  user-select: none;
+}
+.radio-pill > input:checked + span {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(79,70,229,.3);
+}
+.radio-pill > input:focus-visible + span { box-shadow: 0 0 0 2px #c7d2fe; }
+
+/* Select2 multi-selects: align with the form's input look */
+.select2-container { font-size: 0.8rem; }
+.select2-container--default .select2-selection--multiple {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
+  min-height: 2.25rem;
+}
+.paper-sheet .select2-container--default .select2-selection--multiple {
+  border: 0;
+  border-bottom: 1px solid #475569;
+  border-radius: 0;
+  background: transparent;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  border-radius: 0.375rem;
+}
+.select2-dropdown { z-index: 80; }
+
 /* stepper */
 .step-dot { transition: all .2s ease; }
 
