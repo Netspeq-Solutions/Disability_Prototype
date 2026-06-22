@@ -53,6 +53,17 @@ SDMIS.formWizard = (function () {
       return '<input type="text" name="' + name + '" value="' + ui.esc(val || '') + '" maxlength="' + count + '" ' +
         (o.attrs || '') + ' class="cell-input' + (o.upper ? ' cell-upper' : '') + '" style="--cells:' + count + '">';
     }
+    // segmented numeric input — N discrete single-digit boxes + a hidden combined value.
+    // (avoids the letter-spacing/scroll glitch a single comb input has when the last cell fills)
+    function digitBoxes(name, val, count) {
+      val = String(val || '');
+      var boxes = '';
+      for (var i = 0; i < count; i++) {
+        boxes += '<input type="text" class="digit-cell" maxlength="1" inputmode="numeric" data-cells="' + name + '" data-i="' + i + '" value="' + ui.esc(val.charAt(i) || '') + '">';
+      }
+      return '<div class="digit-grid">' + boxes + '</div>' +
+        '<input type="hidden" name="' + name + '" value="' + ui.esc(val) + '">';
+    }
 
     function render() {
       var formBadge = (formType === 'A'
@@ -302,7 +313,7 @@ SDMIS.formWizard = (function () {
         '</div>' +
         '<div class="pf-block" data-field="udid">' +
           '<label class="pf-l">2. UDID number <span class="text-slate-400 font-normal">(18 digits)</span></label>' +
-          '<div class="mt-1">' + cells('udid', s.udid, 18, { attrs: 'inputmode="numeric"' }) + '</div>' +
+          '<div class="mt-1">' + digitBoxes('udid', s.udid, 18) + '</div>' +
           '<p class="field-error hidden text-xs text-rose-600"></p>' +
         '</div>' +
         '<div class="pf-row">' +
@@ -531,8 +542,37 @@ SDMIS.formWizard = (function () {
         $('#cg-relation-wrap').toggle(cgPresent === 'Yes' && cgType === 'Family Member');
       }
       $('#sec-4').on('change', '[name=disabilityType], [name=suspectedDisabilityType], [name=aids], [name=pensionStatus], [name=caregiverPresent], [name=caregiverType]', refresh);
-      // UDID: digits only, exactly 18
-      $('#sec-4').on('input', '[name=udid]', function () { this.value = this.value.replace(/\D/g, '').slice(0, 18); });
+      // UDID: 18 discrete digit boxes — auto-advance, backspace-back, paste-fill
+      function syncDigits(name) {
+        var v = '';
+        $('#sec-4 .digit-cell[data-cells="' + name + '"]').each(function () { v += (this.value || ''); });
+        $('#sec-4 input[type=hidden][name="' + name + '"]').val(v);
+      }
+      $('#sec-4').on('input', '.digit-cell', function () {
+        this.value = (this.value || '').replace(/\D/g, '').slice(0, 1);
+        if (this.value) { var $n = $(this).next('.digit-cell'); if ($n.length) $n.focus(); }
+        syncDigits($(this).data('cells'));
+      });
+      $('#sec-4').on('keydown', '.digit-cell', function (e) {
+        if (e.key === 'Backspace' && !this.value) {
+          var $p = $(this).prev('.digit-cell');
+          if ($p.length) { e.preventDefault(); $p.focus().val(''); syncDigits($(this).data('cells')); }
+        }
+      });
+      $('#sec-4').on('paste', '.digit-cell', function (e) {
+        var raw = ((e.originalEvent || e).clipboardData || window.clipboardData).getData('text') || '';
+        var digits = raw.replace(/\D/g, '');
+        if (!digits) return;
+        e.preventDefault();
+        var name = $(this).data('cells');
+        var $cells = $('#sec-4 .digit-cell[data-cells="' + name + '"]');
+        var start = parseInt($(this).data('i'), 10) || 0;
+        for (var k = 0; k < digits.length && (start + k) < $cells.length; k++) {
+          $cells.eq(start + k).val(digits.charAt(k));
+        }
+        syncDigits(name);
+        $cells.eq(Math.min(start + digits.length, $cells.length - 1)).focus();
+      });
       ui.enhanceMultiSelects($('#sec-4'));
       refresh();
       if (formType === 'A') {
