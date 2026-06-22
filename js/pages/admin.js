@@ -4,9 +4,11 @@ window.SDMIS = window.SDMIS || {};
 SDMIS.router.register('admin', {
   roles: ['admin'],
   title: 'Configuration',
-  render: function ($c) {
+  render: function ($c, params) {
     var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
-    var tab = 'surveys';
+    var TAB_LABELS = { surveys: 'Surveys', zones: 'Zones', officials: 'Officials', masters: 'Masters' };
+    var tab = (params && params[0] && TAB_LABELS[params[0]]) ? params[0] : 'surveys';
+    var masterSub = (C.masterKeys[0] || {}).key;
 
     function counts() {
       return {
@@ -308,17 +310,122 @@ SDMIS.router.register('admin', {
         statCard('Beneficiary Records', k.records, 'bg-rose-50 text-rose-700') + '</div>';
     }
 
+    // ---------- MASTERS (admin-configurable dropdown lists, one screen per config) ----------
+    function masterDef(key) { return (C.masterKeys || []).filter(function (m) { return m.key === key; })[0]; }
+
+    function renderMasters() {
+      var keys = C.masterKeys || [];
+      $('#admin-body').html(
+        '<p class="text-sm text-slate-500 mb-3">Each configuration is managed separately. Items carry an <b>ID</b> (stable key) and a <b>Name</b> (shown in the survey-form dropdowns). These lists are provided by the department.</p>' +
+        '<div class="flex flex-wrap gap-2 mb-4" id="master-subtabs">' +
+          keys.map(function (m) {
+            return '<button class="master-subtab px-3 py-1.5 text-sm rounded-md border ' +
+              (masterSub === m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-600 hover:bg-slate-50') +
+              '" data-key="' + m.key + '">' + ui.esc(m.label) + '</button>';
+          }).join('') +
+        '</div>' +
+        '<div id="master-pane"></div>'
+      );
+      $('#master-subtabs').on('click', '.master-subtab', function () { masterSub = $(this).data('key'); renderMasters(); });
+      renderMasterPane();
+    }
+
+    function renderMasterPane() {
+      var def = masterDef(masterSub);
+      if (!def) return;
+      var items = store.masterItems(def.key);
+      $('#master-pane').html(
+        '<div class="flex items-center justify-between mb-3">' +
+          '<div><h3 class="font-semibold text-slate-700 text-sm">' + ui.esc(def.label) + '</h3>' +
+            '<p class="text-xs text-slate-400">' + items.length + ' item(s) · drives the “' + ui.esc(def.label) + '” dropdown in the survey form.</p></div>' +
+          '<button id="master-add" class="bg-indigo-600 text-white text-sm px-3.5 py-1.5 rounded-md hover:bg-indigo-700">+ Add</button>' +
+        '</div>' +
+        '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
+          '<th class="px-3 py-2">#</th><th class="px-3 py-2">ID</th><th class="px-3 py-2">Name</th><th></th>' +
+        '</tr></thead><tbody id="master-rows"></tbody></table></div>'
+      );
+      drawMasterRows();
+      $('#master-add').on('click', function () { masterItemModal(def, null); });
+      $('#master-rows').on('click', '.master-edit', function () {
+        var id = $(this).data('id');
+        var it = store.masterItems(def.key).filter(function (x) { return x.id === String(id); })[0];
+        if (it) masterItemModal(def, it);
+      });
+      $('#master-rows').on('click', '.master-del', function () {
+        var id = String($(this).data('id'));
+        var it = store.masterItems(def.key).filter(function (x) { return x.id === id; })[0];
+        if (!it) return;
+        ui.modal({
+          title: 'Delete ' + def.label, confirmText: 'Delete',
+          bodyHtml: '<p class="text-sm text-slate-600">Delete <b>' + ui.esc(it.name) + '</b>? Existing records keep their stored value; only the dropdown option is removed.</p>',
+          onConfirm: function () {
+            store.setMasterItems(def.key, store.masterItems(def.key).filter(function (x) { return x.id !== id; }));
+            ui.toast(def.label + ' item deleted', 'success');
+            renderMasterPane();
+          }
+        });
+      });
+    }
+
+    function drawMasterRows() {
+      var items = store.masterItems(masterSub);
+      var rows = items.map(function (it, i) {
+        return '<tr class="border-b hover:bg-slate-50">' +
+          '<td class="px-3 py-2 text-sm text-slate-400">' + (i + 1) + '</td>' +
+          '<td class="px-3 py-2"><span class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">' + ui.esc(it.id) + '</span></td>' +
+          '<td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(it.name) + '</td>' +
+          '<td class="px-3 py-2 text-right whitespace-nowrap">' +
+            '<button class="master-edit text-indigo-600 text-sm hover:underline mr-2" data-id="' + ui.esc(it.id) + '">Edit</button>' +
+            '<button class="master-del text-rose-500 text-sm hover:underline" data-id="' + ui.esc(it.id) + '">Delete</button>' +
+          '</td></tr>';
+      }).join('');
+      $('#master-rows').html(rows || '<tr><td colspan="4">' + ui.emptyState('No items yet. Add one to populate the dropdown.') + '</td></tr>');
+    }
+
+    function masterItemModal(def, item) {
+      var isEdit = !!item;
+      var body =
+        ui.field('ID', ui.text('mid', item ? item.id : '', { placeholder: 'auto-generate if blank', attrs: isEdit ? 'readonly' : '' }),
+          { hint: isEdit ? 'ID is fixed once created.' : 'Optional — a unique id is generated if left blank.' }) +
+        ui.field('Name', ui.text('mname', item ? item.name : '', { placeholder: 'Display name shown in dropdowns' }), { required: true });
+      ui.modal({
+        title: (isEdit ? 'Edit ' : 'Add ') + def.label, confirmText: 'Save', bodyHtml: body,
+        onConfirm: function () {
+          var d = ui.collect($('#modal-body'));
+          var name = (d.mname || '').trim();
+          if (!name) { ui.toast('Name is required', 'error'); return false; }
+          var items = store.masterItems(def.key);
+          if (isEdit) {
+            items = items.map(function (it) { return it.id === item.id ? { id: item.id, name: name } : it; });
+          } else {
+            var id = (d.mid || '').trim() || store.uid('mst');
+            if (items.some(function (it) { return it.id === id; })) { ui.toast('ID already exists', 'error'); return false; }
+            items.push({ id: id, name: name });
+          }
+          store.setMasterItems(def.key, items);
+          ui.toast(def.label + ' saved', 'success');
+          renderMasterPane();
+        }
+      });
+    }
+
     function draw() {
       $c.html(
         buildStats() +
         '<div class="bg-white rounded-xl shadow-sm border">' +
-          '<div class="border-b px-4 flex gap-1 overflow-x-auto">' + tabBtn('surveys', 'Surveys') + tabBtn('zones', 'Zones') + tabBtn('officials', 'Officials') + '</div>' +
+          '<div class="border-b px-4 flex gap-1 overflow-x-auto">' + tabBtn('surveys', 'Surveys') + tabBtn('zones', 'Zones') + tabBtn('officials', 'Officials') + tabBtn('masters', 'Masters') + '</div>' +
           '<div id="admin-body" class="p-4"></div>' +
         '</div>'
       );
-      $('.admin-tab').on('click', function () { tab = $(this).data('tab'); draw(); });
+      // tab clicks navigate by hash so the sidebar menu stays in sync
+      $('.admin-tab').on('click', function () {
+        var t = $(this).data('tab');
+        SDMIS.router.go(t === 'surveys' ? '#/admin' : '#/admin/' + t);
+      });
+      $('#page-title').text(TAB_LABELS[tab] || 'Configuration');
       if (tab === 'surveys') renderSurveys();
       else if (tab === 'zones') renderZones();
+      else if (tab === 'masters') renderMasters();
       else renderOfficials();
     }
 
