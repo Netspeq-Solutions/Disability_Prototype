@@ -125,20 +125,21 @@ SDMIS.ui = (function () {
   function text(name, val, opts) {
     opts = opts || {};
     return '<input type="' + (opts.type || 'text') + '" name="' + name + '" value="' + esc(val || '') + '" ' +
+      'autocomplete="off" ' +
       (opts.placeholder ? 'placeholder="' + esc(opts.placeholder) + '" ' : '') +
       (opts.attrs || '') + ' class="' + inputCls + '">';
   }
 
   function textarea(name, val, opts) {
     opts = opts || {};
-    return '<textarea name="' + name + '" rows="' + (opts.rows || 2) + '" ' +
+    return '<textarea name="' + name + '" rows="' + (opts.rows || 2) + '" autocomplete="off" ' +
       (opts.placeholder ? 'placeholder="' + esc(opts.placeholder) + '" ' : '') +
       'class="' + inputCls + '">' + esc(val || '') + '</textarea>';
   }
 
   function select(name, options, val, opts) {
     opts = opts || {};
-    var html = '<select name="' + name + '" ' + (opts.attrs || '') + ' class="' + inputCls + '">';
+    var html = '<select name="' + name + '" autocomplete="off" ' + (opts.attrs || '') + ' class="' + inputCls + '">';
     html += '<option value="">' + esc(opts.placeholder || '-- Select --') + '</option>';
     options.forEach(function (o) {
       var value = typeof o === 'object' ? o.value : o;
@@ -157,6 +158,49 @@ SDMIS.ui = (function () {
         '<input type="checkbox" name="' + name + '" value="' + esc(o) + '"' + checked + ' class="rounded border-slate-300 text-indigo-600">' +
         esc(o) + '</label>';
     }).join('') + '</div>';
+  }
+
+  // styled radio group (pill buttons). options: array of strings or {value,label}
+  function radioGroup(name, options, val) {
+    return '<div class="flex flex-wrap gap-2 radio-pills" data-name="' + esc(name) + '">' + options.map(function (o) {
+      var value = typeof o === 'object' ? o.value : o;
+      var lbl = typeof o === 'object' ? o.label : o;
+      var checked = String(val) === String(value);
+      return '<label class="radio-pill' + (checked ? ' radio-pill-on' : '') + '">' +
+        '<input type="radio" name="' + esc(name) + '" value="' + esc(value) + '"' + (checked ? ' checked' : '') + ' class="sr-only">' +
+        '<span>' + esc(lbl) + '</span></label>';
+    }).join('') + '</div>';
+  }
+
+  // multi-select (Select2-enhanced). vals: array of selected values.
+  function multiSelect(name, options, vals, opts) {
+    opts = opts || {};
+    vals = vals || [];
+    var html = '<select name="' + name + '" multiple autocomplete="off" class="ms2 ' + inputCls + '" ' +
+      'data-placeholder="' + esc(opts.placeholder || 'Select...') + '">';
+    options.forEach(function (o) {
+      var value = typeof o === 'object' ? o.value : o;
+      var lbl = typeof o === 'object' ? o.label : o;
+      var sel = vals.indexOf(value) > -1 ? ' selected' : '';
+      html += '<option value="' + esc(value) + '"' + sel + '>' + esc(lbl) + '</option>';
+    });
+    html += '</select>';
+    return html;
+  }
+
+  // initialise Select2 on any un-enhanced .ms2 within $scope
+  function enhanceMultiSelects($scope) {
+    if (!$.fn || !$.fn.select2) return;
+    ($scope || $(document)).find('select.ms2').each(function () {
+      var $s = $(this);
+      if ($s.hasClass('select2-hidden-accessible')) return;
+      $s.select2({
+        width: '100%',
+        placeholder: $s.data('placeholder') || 'Select...',
+        closeOnSelect: false,
+        dropdownParent: $s.closest('#modal-overlay').length ? $s.closest('#modal-overlay') : $(document.body)
+      });
+    });
   }
 
   function badge(text, cls) {
@@ -239,7 +283,8 @@ SDMIS.ui = (function () {
     esc: esc, toast: toast, modal: modal, closeModal: closeModal,
     lightbox: lightbox, closeLightbox: closeLightbox,
     field: field, text: text, textarea: textarea, select: select,
-    checkGroup: checkGroup, badge: badge, statusBadge: statusBadge,
+    checkGroup: checkGroup, radioGroup: radioGroup, multiSelect: multiSelect, enhanceMultiSelects: enhanceMultiSelects,
+    badge: badge, statusBadge: statusBadge,
     collect: collect, emptyState: emptyState, inputCls: inputCls,
     pageSlice: pageSlice, renderPager: renderPager
   };

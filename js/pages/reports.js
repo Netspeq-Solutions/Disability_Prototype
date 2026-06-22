@@ -1,116 +1,103 @@
-/* SDMIS — Reports: multi-criteria filters, stats, CSV/print export */
+/* SDMIS — Reports: a main filterable report + named deterministic sub-reports */
 window.SDMIS = window.SDMIS || {};
 
 SDMIS.router.register('reports', {
   roles: ['hq'],
   title: 'Reports',
-  render: function ($c) {
+  render: function ($c, params) {
     var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
     var zones = store.all('zones');
     var all = store.all('beneficiaries');
 
+    // ---- field accessors ----
     function distinct(getter) {
       var set = {};
       all.forEach(function (r) { var v = getter(r); if (v) set[v] = true; });
       return Object.keys(set).sort();
     }
-
     function disabilityOf(r) {
       return r.formType === 'A' ? (r.step4A && r.step4A.disabilityType) : (r.step4B && r.step4B.suspectedDisabilityType);
     }
-    function pensionOf(r) {
-      var s = r.formType === 'A' ? r.step4A : r.step4B;
-      return s ? s.pensionStatus : '';
-    }
+    function step4Of(r) { return r.formType === 'A' ? r.step4A : r.step4B; }
+    function pensionOf(r) { var s = step4Of(r); return s ? s.pensionStatus : ''; }
+    function caregiverOf(r) { var s = step4Of(r); return (s && s.caregiverPresent) || ''; }
+    function caregiverTypeOf(r) { var s = step4Of(r); return (s && s.caregiverType) || ''; }
+    function servicesOf(r) { var s = step4Of(r); return (s && s.services) || []; }
+    function schemesOf(r) { var s = step4Of(r); return (s && s.pensionSchemes) || []; }
     function ageGroupOf(r) {
       var a = parseInt(r.step1.age, 10);
       if (isNaN(a)) return '';
       var g = C.ageGroups.filter(function (x) { return a >= x.min && a <= x.max; })[0];
       return g ? g.value : '';
     }
-
-    var sel = ui.inputCls + ' text-sm';
-    function fSelect(name, label, options) {
-      return '<div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">' + label + '</label>' +
-        ui.select(name, options, '', { placeholder: 'All' }).replace(ui.inputCls, sel) + '</div>';
-    }
-
-    $c.html(
-      '<div class="bg-white border rounded-xl shadow-sm p-4 mb-5 no-print">' +
-        '<div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-slate-700 text-sm">Report Filters</h3>' +
-          '<button id="reset-filters" class="text-xs text-slate-500 hover:text-indigo-600">Reset all</button></div>' +
-        '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3" id="filter-grid">' +
-          fSelect('surveyId', 'Survey', store.all('surveys').map(function (s) { return { value: s.id, label: s.period }; })) +
-          fSelect('formType', 'Form Type', [{ value: 'A', label: 'Form A (Certified)' }, { value: 'B', label: 'Form B (Suspected)' }]) +
-          fSelect('zoneId', 'Zone', zones.map(function (z) { return { value: z.id, label: z.name }; })) +
-          fSelect('gpu', 'GPU', distinct(function (r) { return r.gpu; })) +
-          fSelect('ward', 'Ward', distinct(function (r) { return r.ward; })) +
-          fSelect('gender', 'Gender', C.gender) +
-          fSelect('ageGroup', 'Age Group', C.ageGroups) +
-          fSelect('disability', 'Disability Type', C.disabilityType) +
-          fSelect('education', 'Education', C.education) +
-          fSelect('occupation', 'Occupation', C.occupation) +
-          fSelect('annualIncome', 'Annual Income', C.annualIncome) +
-          fSelect('houseType', 'House Type', C.houseType) +
-          fSelect('maritalStatus', 'Marital Status', C.maritalStatus) +
-          fSelect('residency', 'Local / Non-Local', C.residency) +
-          fSelect('pensionStatus', 'Pension Status', C.pensionStatus) +
-          fSelect('status', 'Verification Status', Object.keys(C.statuses).map(function (k) { return { value: k, label: C.statuses[k] }; })) +
-          '<div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">Search Name</label><input id="search-name" class="' + sel + '" placeholder="Beneficiary..."></div>' +
-        '</div>' +
-        '<div class="flex gap-2 mt-4">' +
-          '<button id="apply-filters" class="bg-indigo-600 text-white text-sm px-4 py-1.5 rounded-md hover:bg-indigo-700">Apply Filters</button>' +
-          '<button id="export-csv" class="border border-slate-300 text-slate-600 text-sm px-4 py-1.5 rounded-md hover:bg-slate-50">⬇ Export CSV</button>' +
-          '<button id="print-pdf" class="border border-slate-300 text-slate-600 text-sm px-4 py-1.5 rounded-md hover:bg-slate-50">🖨 Print / PDF</button>' +
-        '</div>' +
-      '</div>' +
-      '<div id="report-output"></div>'
-    );
-
-    function getFilters() {
-      var f = {};
-      $('#filter-grid select').each(function () { var v = $(this).val(); if (v) f[$(this).attr('name')] = v; });
-      f.name = ($('#search-name').val() || '').toLowerCase();
-      return f;
-    }
-
-    function applyFilters(f) {
-      return all.filter(function (r) {
-        if (f.surveyId && r.surveyId !== f.surveyId) return false;
-        if (f.formType && r.formType !== f.formType) return false;
-        if (f.zoneId && r.zoneId !== f.zoneId) return false;
-        if (f.gpu && r.gpu !== f.gpu) return false;
-        if (f.ward && r.ward !== f.ward) return false;
-        if (f.gender && r.step1.gender !== f.gender) return false;
-        if (f.ageGroup && ageGroupOf(r) !== f.ageGroup) return false;
-        if (f.disability && disabilityOf(r) !== f.disability) return false;
-        if (f.education && r.step2.education !== f.education) return false;
-        if (f.occupation && r.step2.occupation !== f.occupation) return false;
-        if (f.annualIncome && r.step2.annualIncome !== f.annualIncome) return false;
-        if (f.houseType && r.step3.houseType !== f.houseType) return false;
-        if (f.maritalStatus && r.step1.maritalStatus !== f.maritalStatus) return false;
-        if (f.residency && r.step1.residency !== f.residency) return false;
-        if (f.pensionStatus && pensionOf(r) !== f.pensionStatus) return false;
-        if (f.status && r.status !== f.status) return false;
-        if (f.name && (r.step1.name || '').toLowerCase().indexOf(f.name) === -1) return false;
-        return true;
-      });
-    }
-
     function zoneName(id) { var z = store.find('zones', id); return z ? z.name : '—'; }
     function surveyPeriod(id) { var s = id ? store.find('surveys', id) : null; return s ? s.period : '—'; }
+
+    function tally(list, getter) {
+      var o = {}; list.forEach(function (r) { var v = getter(r); if (v) o[v] = (o[v] || 0) + 1; }); return o;
+    }
+    function tallyFlat(list, getter) {
+      var o = {}; list.forEach(function (r) { (getter(r) || []).forEach(function (v) { if (v) o[v] = (o[v] || 0) + 1; }); }); return o;
+    }
+
+    // ---- deterministic sub-reports (each is its own sidebar menu under Reports) ----
+    var PRESETS = [
+      {
+        id: 'caregiver', name: 'Caregiver Coverage Report',
+        desc: 'Beneficiaries who have a caregiver, broken down by caregiver type and zone.',
+        predicate: function (r) { return caregiverOf(r) === 'Yes'; },
+        breakdowns: function (list) {
+          return [
+            { title: 'By Caregiver Type', obj: tally(list, caregiverTypeOf) },
+            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+          ];
+        }
+      },
+      {
+        id: 'salaried', name: 'Salaried Caregivers Report',
+        desc: 'Hired / Professional caregivers where a salary or fee is paid.',
+        predicate: function (r) { var t = caregiverTypeOf(r); return caregiverOf(r) === 'Yes' && (t === 'Hired' || t === 'Professional'); },
+        breakdowns: function (list) {
+          return [
+            { title: 'By Caregiver Type', obj: tally(list, caregiverTypeOf) },
+            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+          ];
+        }
+      },
+      {
+        id: 'pension', name: 'Pension Scheme Enrolment Report',
+        desc: 'Pension recipients, broken down by scheme and zone.',
+        predicate: function (r) { return pensionOf(r) === 'Yes'; },
+        breakdowns: function (list) {
+          return [
+            { title: 'By Pension Scheme', obj: tallyFlat(list, schemesOf) },
+            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+          ];
+        }
+      },
+      {
+        id: 'services', name: 'Services Utilisation Report',
+        desc: 'Beneficiaries receiving one or more services, by service type and zone.',
+        predicate: function (r) { return servicesOf(r).length > 0; },
+        breakdowns: function (list) {
+          return [
+            { title: 'By Service', obj: tallyFlat(list, servicesOf) },
+            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+          ];
+        }
+      }
+    ];
 
     var lastRows = [];
     var PER = 15;
 
-    function renderOutput(list) {
+    // ---- shared output renderer (stats + breakdowns + detail table) ----
+    function renderOutput(list, opts) {
+      opts = opts || {};
       lastRows = list;
-      // breakdown stats
-      var byZone = {}, byDis = {}, byGender = {}, byForm = { A: 0, B: 0 };
+      var byZone = {}, byForm = { A: 0, B: 0 };
       list.forEach(function (r) {
         byZone[zoneName(r.zoneId)] = (byZone[zoneName(r.zoneId)] || 0) + 1;
-        var d = disabilityOf(r); if (d) byDis[d] = (byDis[d] || 0) + 1;
-        byGender[r.step1.gender || 'Unknown'] = (byGender[r.step1.gender || 'Unknown'] || 0) + 1;
         byForm[r.formType]++;
       });
 
@@ -118,13 +105,29 @@ SDMIS.router.register('reports', {
         var rows = Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; }).map(function (k) {
           return '<tr class="border-b border-slate-100"><td class="py-1 text-slate-600">' + ui.esc(k) + '</td><td class="py-1 text-right font-medium text-slate-700">' + obj[k] + '</td></tr>';
         }).join('');
-        return '<div class="bg-white border rounded-xl shadow-sm p-4"><h4 class="text-sm font-semibold text-slate-700 mb-2">' + title + '</h4>' +
+        return '<div class="bg-white border rounded-xl shadow-sm p-4"><h4 class="text-sm font-semibold text-slate-700 mb-2">' + ui.esc(title) + '</h4>' +
           '<table class="w-full text-sm">' + (rows || '<tr><td class="text-slate-400 py-2">No data</td></tr>') + '</table></div>';
       }
 
+      // breakdown tables: report-supplied, else default (zone / disability / gender)
+      var breakdowns = opts.breakdowns;
+      if (!breakdowns) {
+        var byDis = {}, byGender = {};
+        list.forEach(function (r) {
+          var d = disabilityOf(r); if (d) byDis[d] = (byDis[d] || 0) + 1;
+          byGender[r.step1.gender || 'Unknown'] = (byGender[r.step1.gender || 'Unknown'] || 0) + 1;
+        });
+        breakdowns = [{ title: 'Zone-wise', obj: byZone }, { title: 'Disability-wise', obj: byDis }, { title: 'Gender-wise', obj: byGender }];
+      }
+      var reportBanner = opts.title
+        ? '<div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-5"><h3 class="font-semibold text-indigo-800 text-sm">' + ui.esc(opts.title) + '</h3>' +
+            (opts.desc ? '<p class="text-xs text-indigo-600 mt-0.5">' + ui.esc(opts.desc) + '</p>' : '') + '</div>'
+        : '';
+
       $('#report-output').html(
         '<div id="print-area">' +
-          '<div class="hidden print:block mb-3"><h2 class="text-lg font-bold">SDMIS — Beneficiary Report</h2><p class="text-xs">Generated ' + new Date().toLocaleString() + '</p></div>' +
+          '<div class="hidden print:block mb-3"><h2 class="text-lg font-bold">SDMIS — ' + ui.esc(opts.title || 'Beneficiary Report') + '</h2><p class="text-xs">Generated ' + new Date().toLocaleString() + '</p></div>' +
+          reportBanner +
           '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' +
             '<div class="bg-indigo-600 text-white rounded-xl p-4"><div class="text-2xl font-bold">' + list.length + '</div><div class="text-xs opacity-80">Matching Records</div></div>' +
             '<div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-emerald-600">' + byForm.A + '</div><div class="text-xs text-slate-400">Form A (Certified)</div></div>' +
@@ -132,7 +135,7 @@ SDMIS.router.register('reports', {
             '<div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-slate-700">' + Object.keys(byZone).length + '</div><div class="text-xs text-slate-400">Zones Covered</div></div>' +
           '</div>' +
           '<div class="grid md:grid-cols-3 gap-4 mb-5">' +
-            statTable('Zone-wise', byZone) + statTable('Disability-wise', byDis) + statTable('Gender-wise', byGender) +
+            breakdowns.map(function (b) { return statTable(b.title, b.obj); }).join('') +
           '</div>' +
           '<div class="bg-white border rounded-xl shadow-sm">' +
             '<div class="px-4 py-3 border-b font-medium text-slate-700 text-sm">Detailed Beneficiary List</div>' +
@@ -161,7 +164,7 @@ SDMIS.router.register('reports', {
             '<td class="px-2 py-1.5">' + ui.statusBadge(r.status) + '</td>' +
           '</tr>';
         }).join('');
-        $('#rep-rows').html(rows || '<tr><td colspan="9">' + ui.emptyState('No records match the selected filters') + '</td></tr>');
+        $('#rep-rows').html(rows || '<tr><td colspan="9">' + ui.emptyState('No records match') + '</td></tr>');
         ui.renderPager($('#rep-pager'), meta, function (p) { page = p; drawTable(); });
       }
       drawTable();
@@ -169,16 +172,19 @@ SDMIS.router.register('reports', {
 
     function exportCsv() {
       if (!lastRows.length) { ui.toast('No records to export', 'warn'); return; }
-      var headers = ['Name', 'Form', 'Survey', 'Zone', 'GPU', 'Ward', 'Age', 'Gender', 'Disability', 'Education', 'Occupation', 'Annual Income', 'House Type', 'Residency', 'Status', 'Enumerator'];
+      var headers = ['Name', 'Form', 'Survey', 'Zone', 'GPU', 'Block', 'Ward', 'Age', 'Gender', 'Disability', 'Education', 'Occupation', 'Annual Income', 'House Type', 'Residency',
+        'Pension', 'Pension Schemes', 'Services', 'Caregiver', 'Caregiver Type', 'Caregiver Salary/Fee', 'Status', 'Enumerator'];
       var lines = [headers.join(',')];
       lastRows.forEach(function (r) {
         var zoneRec = store.find('zones', r.zoneId);
         var ens = (zoneRec && zoneRec.enumerators) || [];
         var en = ens.filter(function (e) { return e.id === r.enumeratorId; })[0] || {};
+        var s4 = step4Of(r) || {};
         var row = [
-          r.step1.name, r.formType, surveyPeriod(r.surveyId), zoneName(r.zoneId), r.gpu, r.ward, r.step1.age, r.step1.gender,
-          disabilityOf(r), r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType,
-          r.step1.residency, C.statuses[r.status], en.name
+          r.step1.name, r.formType, surveyPeriod(r.surveyId), zoneName(r.zoneId), r.gpu, r.step1.block, r.ward, r.step1.age, r.step1.gender,
+          disabilityOf(r), r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType, r.step1.residency,
+          pensionOf(r), schemesOf(r).join('; '), servicesOf(r).join('; '), caregiverOf(r), caregiverTypeOf(r), s4.caregiverSalary,
+          C.statuses[r.status], en.name
         ].map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; });
         lines.push(row.join(','));
       });
@@ -190,13 +196,117 @@ SDMIS.router.register('reports', {
       ui.toast('CSV exported (' + lastRows.length + ' records)', 'success');
     }
 
-    $('#apply-filters').on('click', function () { renderOutput(applyFilters(getFilters())); });
-    $('#search-name').on('keydown', function (e) { if (e.key === 'Enter') renderOutput(applyFilters(getFilters())); });
-    $('#reset-filters').on('click', function () { $('#filter-grid select').val(''); $('#search-name').val(''); renderOutput(all); });
-    $('#export-csv').on('click', exportCsv);
-    $('#print-pdf').on('click', function () { window.print(); });
+    // ---- a named deterministic sub-report (no filters; canned predicate + breakdowns) ----
+    function renderPresetReport(def) {
+      $('#page-title').text(def.name);
+      var list = all.filter(def.predicate);
+      $c.html(
+        '<div class="bg-white border rounded-xl shadow-sm p-4 mb-5 no-print flex flex-wrap items-center justify-between gap-3">' +
+          '<div><h3 class="font-semibold text-slate-700 text-sm">' + ui.esc(def.name) + '</h3>' +
+            '<p class="text-xs text-slate-400 mt-0.5">' + ui.esc(def.desc) + '</p></div>' +
+          '<div class="flex gap-2">' +
+            '<button id="export-csv" class="border border-slate-300 text-slate-600 text-sm px-4 py-1.5 rounded-md hover:bg-slate-50">⬇ Export CSV</button>' +
+            '<button id="print-pdf" class="border border-slate-300 text-slate-600 text-sm px-4 py-1.5 rounded-md hover:bg-slate-50">🖨 Print / PDF</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="report-output"></div>'
+      );
+      renderOutput(list, { title: def.name, desc: def.desc, breakdowns: def.breakdowns(list) });
+      $('#export-csv').on('click', exportCsv);
+      $('#print-pdf').on('click', function () { window.print(); });
+    }
 
-    // initial render with all records
-    renderOutput(all);
+    // ---- main filterable report ----
+    function renderMainReport() {
+      var sel = ui.inputCls + ' text-sm';
+      function fSelect(name, label, options) {
+        return '<div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">' + label + '</label>' +
+          ui.select(name, options, '', { placeholder: 'All' }).replace(ui.inputCls, sel) + '</div>';
+      }
+
+      $c.html(
+        '<div class="bg-white border rounded-xl shadow-sm p-4 mb-5 no-print">' +
+          '<div class="flex items-center justify-between mb-3"><h3 class="font-semibold text-slate-700 text-sm">Report Filters</h3>' +
+            '<button id="reset-filters" class="text-xs text-slate-500 hover:text-indigo-600">Reset all</button></div>' +
+          '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3" id="filter-grid">' +
+            fSelect('surveyId', 'Survey', store.all('surveys').map(function (s) { return { value: s.id, label: s.period }; })) +
+            fSelect('formType', 'Form Type', [{ value: 'A', label: 'Form A (Certified)' }, { value: 'B', label: 'Form B (Suspected)' }]) +
+            fSelect('zoneId', 'Zone', zones.map(function (z) { return { value: z.id, label: z.name }; })) +
+            fSelect('gpu', 'GPU', distinct(function (r) { return r.gpu; })) +
+            fSelect('ward', 'Ward', distinct(function (r) { return r.ward; })) +
+            fSelect('gender', 'Gender', C.gender) +
+            fSelect('ageGroup', 'Age Group', C.ageGroups) +
+            fSelect('disability', 'Disability Type', store.master('disabilityType')) +
+            fSelect('education', 'Education', C.education) +
+            fSelect('occupation', 'Occupation', C.occupation) +
+            fSelect('annualIncome', 'Annual Income', C.annualIncome) +
+            fSelect('houseType', 'House Type', C.houseType) +
+            fSelect('maritalStatus', 'Marital Status', C.maritalStatus) +
+            fSelect('residency', 'Local / Non-Local', C.residency) +
+            fSelect('pensionStatus', 'Pension Status', C.pensionStatus) +
+            fSelect('pensionScheme', 'Pension Scheme', store.master('pensionSchemes')) +
+            fSelect('caregiver', 'Has Caregiver', C.pensionStatus) +
+            fSelect('caregiverType', 'Caregiver Type', store.master('caregiverTypes')) +
+            fSelect('service', 'Service Receiving', store.master('services')) +
+            fSelect('status', 'Verification Status', Object.keys(C.statuses).map(function (k) { return { value: k, label: C.statuses[k] }; })) +
+            '<div><label class="block text-[11px] font-medium text-slate-500 mb-0.5">Search Name</label><input id="search-name" class="' + sel + '" placeholder="Beneficiary..."></div>' +
+          '</div>' +
+          '<div class="flex gap-2 mt-4">' +
+            '<button id="apply-filters" class="bg-indigo-600 text-white text-sm px-4 py-1.5 rounded-md hover:bg-indigo-700">Apply Filters</button>' +
+            '<button id="export-csv" class="border border-slate-300 text-slate-600 text-sm px-4 py-1.5 rounded-md hover:bg-slate-50">⬇ Export CSV</button>' +
+            '<button id="print-pdf" class="border border-slate-300 text-slate-600 text-sm px-4 py-1.5 rounded-md hover:bg-slate-50">🖨 Print / PDF</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="report-output"></div>'
+      );
+
+      function getFilters() {
+        var f = {};
+        $('#filter-grid select').each(function () { var v = $(this).val(); if (v) f[$(this).attr('name')] = v; });
+        f.name = ($('#search-name').val() || '').toLowerCase();
+        return f;
+      }
+
+      function applyFilters(f) {
+        return all.filter(function (r) {
+          if (f.surveyId && r.surveyId !== f.surveyId) return false;
+          if (f.formType && r.formType !== f.formType) return false;
+          if (f.zoneId && r.zoneId !== f.zoneId) return false;
+          if (f.gpu && r.gpu !== f.gpu) return false;
+          if (f.ward && r.ward !== f.ward) return false;
+          if (f.gender && r.step1.gender !== f.gender) return false;
+          if (f.ageGroup && ageGroupOf(r) !== f.ageGroup) return false;
+          if (f.disability && disabilityOf(r) !== f.disability) return false;
+          if (f.education && r.step2.education !== f.education) return false;
+          if (f.occupation && r.step2.occupation !== f.occupation) return false;
+          if (f.annualIncome && r.step2.annualIncome !== f.annualIncome) return false;
+          if (f.houseType && r.step3.houseType !== f.houseType) return false;
+          if (f.maritalStatus && r.step1.maritalStatus !== f.maritalStatus) return false;
+          if (f.residency && r.step1.residency !== f.residency) return false;
+          if (f.pensionStatus && pensionOf(r) !== f.pensionStatus) return false;
+          if (f.pensionScheme && schemesOf(r).indexOf(f.pensionScheme) === -1) return false;
+          if (f.caregiver && caregiverOf(r) !== f.caregiver) return false;
+          if (f.caregiverType && caregiverTypeOf(r) !== f.caregiverType) return false;
+          if (f.service && servicesOf(r).indexOf(f.service) === -1) return false;
+          if (f.status && r.status !== f.status) return false;
+          if (f.name && (r.step1.name || '').toLowerCase().indexOf(f.name) === -1) return false;
+          return true;
+        });
+      }
+
+      $('#apply-filters').on('click', function () { renderOutput(applyFilters(getFilters())); });
+      $('#search-name').on('keydown', function (e) { if (e.key === 'Enter') renderOutput(applyFilters(getFilters())); });
+      $('#reset-filters').on('click', function () { $('#filter-grid select').val(''); $('#search-name').val(''); renderOutput(all); });
+      $('#export-csv').on('click', exportCsv);
+      $('#print-pdf').on('click', function () { window.print(); });
+
+      renderOutput(all); // initial render with all records
+    }
+
+    // ---- dispatch: /reports → main; /reports/<id> → named sub-report ----
+    var presetId = params && params[0];
+    var preset = PRESETS.filter(function (d) { return d.id === presetId; })[0];
+    if (preset) renderPresetReport(preset);
+    else renderMainReport();
   }
 });

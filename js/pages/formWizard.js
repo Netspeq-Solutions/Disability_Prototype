@@ -12,16 +12,17 @@ SDMIS.formWizard = (function () {
       formImages: [],
       step1: {
         surveyDate: new Date().toISOString().slice(0, 10),
-        name: '', parentName: '', age: '', gender: '', address: '', gpu: '', ward: '',
-        houseNo: '', pin: '', contact: '', altContactName: '', altContactNo: '',
+        name: '', parentName: '', fatherName: '', motherName: '', dob: '', age: '', gender: '',
+        address: '', permSameAsCurrent: 'Yes', permanentAddress: '', gpu: '', block: '', ward: '',
+        houseNo: '', pin: '', contact: '', altMobile: '', altContactName: '', altContactNo: '',
         aadhaar: '', voterId: '', offsprings: [], siblings: [],
-        residency: 'local', coiNo: '', rcNo: '', sikkimSubjectNo: '', idProofNo: '',
+        residency: 'local', coiDocType: '', coiDocNo: '', idProofNo: '',
         maritalStatus: '', photo: ''
       },
-      step2: { education: '', educationOther: '', institute: '', occupation: '', postName: '', employmentType: '', employmentRemark: '', businessName: '', annualIncome: '' },
+      step2: { education: '', educationOther: '', institute: '', occupation: '', postName: '', employmentType: '', employmentRemark: '', placeOfEmployment: '', businessName: '', annualIncome: '' },
       step3: { houseType: '', familyCount: '', facilities: [], accessibilityDetail: '', language: '' },
-      step4A: formType === 'A' ? { disabilityType: '', disabilityOther: '', disabilityPercent: '', certNo: '', certImage: '', udid: '', issueDate: '', issuePlace: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSince: '', medicalProblems: '', medicalSince: '', services: '', caregiverName: '', caregiverRelation: '' } : null,
-      step4B: formType === 'B' ? { suspectedDisabilityType: '', disabilityOther: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSince: '', medicalProblems: '', medicalSince: '', services: '', caregiverName: '', caregiverRelation: '' } : null
+      step4A: formType === 'A' ? { disabilityType: '', disabilityOther: '', disabilityPercent: '', certNo: '', certImage: '', udid: '', issueDate: '', issuePlace: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null,
+      step4B: formType === 'B' ? { suspectedDisabilityType: '', disabilityOther: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null
     };
   }
 
@@ -146,6 +147,9 @@ SDMIS.formWizard = (function () {
       var gpuOpts = zone ? zone.gpus : [];
       var wardOpts = zone ? zone.wards : [];
 
+      var reqGender = formType === 'A';   // Form B mandatory set: Name, Address, Contact, Disability (req #13)
+      var reqContact = formType === 'B';
+
       return '<div id="sec-1">' +
         // header: survey date (left) + passport photo box (right)
         '<div class="pf-head">' +
@@ -162,32 +166,57 @@ SDMIS.formWizard = (function () {
 
         '<div class="pf-row">' +
           pf('1. Name', ui.text('name', s.name, { attrs: 'style="text-transform:uppercase"' }), 'name', { req: true, basis: '3 1 200px' }) +
-          pf('Gender (M/F)', ui.select('gender', C.gender, s.gender), 'gender', { req: true, basis: '1 1 120px' }) +
-          pf('Age', ui.text('age', s.age, { type: 'number', attrs: 'min=0 max=120' }), 'age', { req: true, basis: '0 1 80px' }) +
+          pf('Gender', ui.select('gender', C.gender, s.gender), 'gender', { req: reqGender, basis: '1 1 120px' }) +
         '</div>' +
-        pf("2. Father's / Mother's Name", ui.text('parentName', s.parentName), 'parentName', { req: true, block: true }) +
-        pf('3. Address', ui.text('address', s.address), 'address', { req: true, block: true }) +
         '<div class="pf-row">' +
-          pf('Ward', wardOpts.length ? ui.select('ward', wardOpts, s.ward) : ui.text('ward', s.ward), 'ward', { req: true, basis: '1 1 110px' }) +
+          pf('Date of Birth', ui.text('dob', s.dob, { type: 'date' }), 'dob', { basis: '1 1 160px' }) +
+          pf('Age', ui.text('age', s.age, { type: 'number', attrs: 'min=0 max=120' }), 'age', { basis: '0 1 90px' }) +
+          '<div class="pf" style="flex:2 1 200px"><span class="pf-l text-slate-400" style="white-space:normal">Enter Date of Birth to auto-calculate age, or fill Age directly if DOB is unknown.</span></div>' +
+        '</div>' +
+        '<div class="pf-row">' +
+          pf("2. Father's Name", ui.text('fatherName', s.fatherName), 'fatherName', { basis: '1 1 220px' }) +
+          pf("Mother's Name", ui.text('motherName', s.motherName), 'motherName', { basis: '1 1 220px' }) +
+        '</div>' +
+        pf('3. Present Address', ui.text('address', s.address), 'address', { req: true, block: true }) +
+        '<div class="pf-row">' +
+          pf('GPU', gpuOpts.length ? ui.select('gpu', gpuOpts, s.gpu) : ui.text('gpu', s.gpu), 'gpu', { basis: '1 1 150px' }) +
+          pf('Block', ui.text('block', s.block), 'block', { basis: '1 1 150px' }) +
+          pf('Ward', wardOpts.length ? ui.select('ward', wardOpts, s.ward) : ui.text('ward', s.ward), 'ward', { basis: '1 1 110px' }) +
           pf('House No.', ui.text('houseNo', s.houseNo), 'houseNo', { basis: '1 1 110px' }) +
-          pf('GPU', gpuOpts.length ? ui.select('gpu', gpuOpts, s.gpu) : ui.text('gpu', s.gpu), 'gpu', { req: true, basis: '1 1 150px' }) +
-          pf('Pin number', ui.text('pin', s.pin, { attrs: 'maxlength=6' }), 'pin', { req: true, basis: '1 1 110px' }) +
+          pf('Pin number', ui.text('pin', s.pin, { attrs: 'maxlength=6' }), 'pin', { basis: '1 1 110px' }) +
         '</div>' +
-
-        pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: true, block: true }) +
-        pf('5. Aadhar number', ui.text('aadhaar', s.aadhaar, { attrs: 'inputmode="numeric" maxlength=12' }), 'aadhaar', { req: true, block: true }) +
+        '<div class="pf-block" data-field="permSameAsCurrent">' +
+          '<label class="pf-l">Is permanent address same as present address?</label>' +
+          '<div class="mt-1">' + ui.radioGroup('permSameAsCurrent', C.pensionStatus, s.permSameAsCurrent || 'Yes') + '</div>' +
+        '</div>' +
+        pf('Permanent Address', ui.text('permanentAddress', s.permanentAddress), 'permanentAddress', { req: true, block: true, id: 'perm-addr-wrap' }) +
 
         '<div class="pf-row">' +
-          pf('6. Voter ID (EPIC No.)', ui.text('voterId', s.voterId), 'voterId', { basis: '1 1 180px' }) +
-          pf('COI Number', ui.text('coiNo', s.coiNo), 'coiNo', { basis: '1 1 180px' }) +
+          pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: reqContact, basis: '1 1 200px' }) +
+          pf('Alternate Mobile Number', ui.text('altMobile', s.altMobile, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'altMobile', { basis: '1 1 200px' }) +
+        '</div>' +
+        pf('5. Aadhar number', ui.text('aadhaar', s.aadhaar, { attrs: 'inputmode="numeric" maxlength=12' }), 'aadhaar', { block: true }) +
+
+        // ---- COI / Residency details (req #6) ----
+        '<div class="pf-block" data-field="residency">' +
+          '<label class="pf-l">6. Residency Status</label>' +
+          '<div class="mt-1">' + ui.radioGroup('residency', C.residency, s.residency || 'local') + '</div>' +
+        '</div>' +
+        '<div id="coi-wrap" class="pf-row">' +
+          pf('Document Type', ui.select('coiDocType', C.coiDocTypes, s.coiDocType), 'coiDocType', { basis: '1 1 170px', id: 'coi-doctype-wrap' }) +
+          pf('Document Number', ui.text('coiDocNo', s.coiDocNo), 'coiDocNo', { basis: '2 1 220px', id: 'coi-docno-wrap' }) +
+        '</div>' +
+        '<div id="idproof-wrap" class="pf-row">' +
+          pf('ID Proof No. (PAN / Passport etc.)', ui.text('idProofNo', s.idProofNo), 'idProofNo', { basis: '1 1 100%' }) +
         '</div>' +
 
         '<div class="pf-row">' +
+          pf('7. Voter ID (EPIC No.)', ui.text('voterId', s.voterId), 'voterId', { basis: '1 1 180px' }) +
           pf('Marital Status', ui.select('maritalStatus', C.maritalStatus, s.maritalStatus), 'maritalStatus', { basis: '1 1 150px' }) +
         '</div>' +
         '<div class="pf-row">' +
-          pf('Additional Contact Person', ui.text('altContactName', s.altContactName), 'altContactName', { req: true, basis: '2 1 200px' }) +
-          pf('Contact No.', ui.text('altContactNo', s.altContactNo, { type: 'tel', attrs: 'maxlength=10' }), 'altContactNo', { req: true, basis: '1 1 150px' }) +
+          pf('Additional Contact Person', ui.text('altContactName', s.altContactName), 'altContactName', { basis: '2 1 200px' }) +
+          pf('Contact No.', ui.text('altContactNo', s.altContactNo, { type: 'tel', attrs: 'maxlength=10' }), 'altContactNo', { basis: '1 1 150px' }) +
         '</div>' +
 
         // offsprings / siblings (M/F + age, as on the paper form)
@@ -222,14 +251,15 @@ SDMIS.formWizard = (function () {
         '<div class="pf-row">' +
           pf('1. Education', ui.select('education', C.education, s.education), 'education', { req: true, basis: '1 1 160px' }) +
           pf('Institute / School', ui.text('institute', s.institute), 'institute', { basis: '2 1 200px' }) +
-          pf('Any other', ui.text('educationOther', s.educationOther), 'educationOther', { basis: '1 1 150px', id: 'education-other-wrap' }) +
+          pf('Any other', ui.text('educationOther', s.educationOther), 'educationOther', { req: true, basis: '1 1 150px', id: 'education-other-wrap' }) +
         '</div>' +
         '<div class="pf-row">' +
           pf('2. Occupation', ui.select('occupation', C.occupation, s.occupation), 'occupation', { req: true, basis: '1 1 170px' }) +
-          pf('Post held', ui.text('postName', s.postName), 'postName', { basis: '1 1 150px', id: 'occ-post-wrap' }) +
-          pf('Nature of appointment', ui.select('employmentType', C.employmentType, s.employmentType), 'employmentType', { basis: '1 1 170px', id: 'occ-emptype-wrap' }) +
-          pf('Any other', ui.text('employmentRemark', s.employmentRemark), 'employmentRemark', { basis: '1 1 150px', id: 'occ-emprem-wrap' }) +
-          pf('Business name', ui.text('businessName', s.businessName), 'businessName', { basis: '1 1 150px', id: 'occ-biz-wrap' }) +
+          pf('Post held', ui.text('postName', s.postName), 'postName', { req: true, basis: '1 1 150px', id: 'occ-post-wrap' }) +
+          pf('Nature of appointment', ui.select('employmentType', C.employmentType, s.employmentType), 'employmentType', { req: true, basis: '1 1 170px', id: 'occ-emptype-wrap' }) +
+          pf('Any other', ui.text('employmentRemark', s.employmentRemark), 'employmentRemark', { req: true, basis: '1 1 150px', id: 'occ-emprem-wrap' }) +
+          pf('Place of Employment', ui.text('placeOfEmployment', s.placeOfEmployment), 'placeOfEmployment', { req: true, basis: '1 1 180px', id: 'occ-place-wrap' }) +
+          pf('Business name', ui.text('businessName', s.businessName), 'businessName', { req: true, basis: '1 1 150px', id: 'occ-biz-wrap' }) +
         '</div>' +
         '<div class="pf-row">' +
           pf('3. Cumulative annual income', ui.select('annualIncome', C.annualIncome, s.annualIncome), 'annualIncome', { req: true, basis: '0 1 240px' }) +
@@ -265,13 +295,15 @@ SDMIS.formWizard = (function () {
       return '<div id="sec-4">' +
         '<div class="pf-sec">(d) Disability Information</div>' +
         '<div class="pf-row">' +
-          pf('1. Disability type', ui.select('disabilityType', C.disabilityType, s.disabilityType), 'disabilityType', { req: true, basis: '2 1 200px' }) +
+          pf('1. Disability type', ui.select('disabilityType', store.master('disabilityType'), s.disabilityType), 'disabilityType', { req: true, basis: '2 1 200px' }) +
           pf('%', ui.text('disabilityPercent', s.disabilityPercent, { type: 'number', attrs: 'min=0 max=100' }), 'disabilityPercent', { req: true, basis: '0 1 80px' }) +
           pf('Certificate number', ui.text('certNo', s.certNo), 'certNo', { req: true, basis: '2 1 180px' }) +
-          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { basis: '1 1 150px', id: 'dis-other-wrap' }) +
+          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { req: true, basis: '1 1 150px', id: 'dis-other-wrap' }) +
         '</div>' +
-        '<div class="pf-row">' +
-          pf('2. UDID number', ui.text('udid', s.udid, { attrs: 'maxlength=18 style="text-transform:uppercase"' }), 'udid', { basis: '1 1 100%' }) +
+        '<div class="pf-block" data-field="udid">' +
+          '<label class="pf-l">2. UDID number <span class="text-slate-400 font-normal">(18 digits)</span></label>' +
+          '<div class="mt-1">' + cells('udid', s.udid, 18, { attrs: 'inputmode="numeric"' }) + '</div>' +
+          '<p class="field-error hidden text-xs text-rose-600"></p>' +
         '</div>' +
         '<div class="pf-row">' +
           pf('Issue date', ui.text('issueDate', s.issueDate, { type: 'date' }), 'issueDate', { basis: '1 1 160px' }) +
@@ -293,8 +325,8 @@ SDMIS.formWizard = (function () {
         '<div class="pf-sec">(d) Suspected Disability Information</div>' +
         '<div class="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded px-3 py-2 mb-3 no-print">Form B captures suspected cases — certificate, UDID and disability percentage are recorded only after certification (during Form B → Form A conversion).</div>' +
         '<div class="pf-row">' +
-          pf('1. Suspected disability type', ui.select('suspectedDisabilityType', C.disabilityType, s.suspectedDisabilityType), 'suspectedDisabilityType', { req: true, basis: '2 1 220px' }) +
-          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { basis: '1 1 150px', id: 'dis-other-wrap' }) +
+          pf('1. Suspected disability type', ui.select('suspectedDisabilityType', store.master('disabilityType'), s.suspectedDisabilityType), 'suspectedDisabilityType', { req: true, basis: '2 1 220px' }) +
+          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { req: true, basis: '1 1 150px', id: 'dis-other-wrap' }) +
         '</div>' +
         aidsBlock(s) +
         commonDisability(s) +
@@ -307,23 +339,54 @@ SDMIS.formWizard = (function () {
           '<div class="mt-1">' + ui.checkGroup('aids', C.aids, s.aids) + '</div>' +
           '<p class="field-error hidden text-xs text-rose-600"></p>' +
         '</div>' +
-        pf('Specify other aid / appliance', ui.text('aidsOther', s.aidsOther), 'aidsOther', { block: true, id: 'aids-other-wrap' });
+        pf('Specify other aid / appliance', ui.text('aidsOther', s.aidsOther), 'aidsOther', { req: true, block: true, id: 'aids-other-wrap' });
     }
 
     function commonDisability(s) {
+      var schemes = store.master('pensionSchemes');
+      var services = store.master('services');
+      var cgTypes = store.master('caregiverTypes');
       return pf('4. Any other benefits', ui.text('benefits', s.benefits), 'benefits', { block: true }) +
-        '<div class="pf-row">' +
-          pf('5. Pension receiving (Yes/No)', ui.select('pensionStatus', C.pensionStatus, s.pensionStatus), 'pensionStatus', { basis: '1 1 200px' }) +
-          pf('Since', ui.text('pensionSince', s.pensionSince, { placeholder: 'Year' }), 'pensionSince', { basis: '1 1 120px', id: 'pension-since-wrap' }) +
+
+        // ---- Pension (req #14): Yes/No pills + scheme multiselect ----
+        '<div class="pf-block" data-field="pensionStatus">' +
+          '<label class="pf-l">5. Pension receiving</label>' +
+          '<div class="mt-1">' + ui.radioGroup('pensionStatus', C.pensionStatus, s.pensionStatus) + '</div>' +
         '</div>' +
+        '<div id="pension-detail-wrap">' +
+          '<div class="pf-block" data-field="pensionSchemes">' +
+            '<label class="pf-l">Pension scheme(s)</label>' +
+            '<div class="mt-1">' + ui.multiSelect('pensionSchemes', schemes, s.pensionSchemes || [], { placeholder: 'Select scheme(s)…' }) + '</div>' +
+            '<p class="field-error hidden text-xs text-rose-600"></p>' +
+          '</div>' +
+          pf('Since', ui.text('pensionSince', s.pensionSince, { placeholder: 'Year' }), 'pensionSince', { block: true }) +
+        '</div>' +
+
         '<div class="pf-row">' +
           pf('6. Associated Medical Problem', ui.text('medicalProblems', s.medicalProblems), 'medicalProblems', { basis: '2 1 220px' }) +
           pf('Since', ui.text('medicalSince', s.medicalSince, { placeholder: 'Year' }), 'medicalSince', { basis: '1 1 120px' }) +
         '</div>' +
-        pf('7. Services receiving', ui.text('services', s.services), 'services', { block: true }) +
-        '<div class="pf-row">' +
-          pf('8. Care Giver', ui.text('caregiverName', s.caregiverName), 'caregiverName', { basis: '2 1 200px' }) +
-          pf('Relation', ui.text('caregiverRelation', s.caregiverRelation), 'caregiverRelation', { basis: '1 1 150px' }) +
+
+        // ---- Services receiving (req #15): multiselect from master ----
+        '<div class="pf-block" data-field="services">' +
+          '<label class="pf-l">7. Services receiving</label>' +
+          '<div class="mt-1">' + ui.multiSelect('services', services, s.services || [], { placeholder: 'Select service(s)…' }) + '</div>' +
+        '</div>' +
+
+        // ---- Caregiver (req #16): Yes/No → type → salary | relation ----
+        '<div class="pf-block" data-field="caregiverPresent">' +
+          '<label class="pf-l">8. Caregiver</label>' +
+          '<div class="mt-1">' + ui.radioGroup('caregiverPresent', C.pensionStatus, s.caregiverPresent) + '</div>' +
+        '</div>' +
+        '<div id="caregiver-detail-wrap">' +
+          '<div class="pf-row">' +
+            pf('Caregiver type', ui.select('caregiverType', cgTypes, s.caregiverType), 'caregiverType', { req: true, basis: '1 1 180px' }) +
+            pf('Caregiver name', ui.text('caregiverName', s.caregiverName), 'caregiverName', { basis: '2 1 200px' }) +
+          '</div>' +
+          '<div class="pf-row">' +
+            pf('Salary / Fee paid', ui.text('caregiverSalary', s.caregiverSalary, { placeholder: 'e.g. ₹6000/month' }), 'caregiverSalary', { req: true, basis: '1 1 180px', id: 'cg-salary-wrap' }) +
+            pf('Relation', ui.text('caregiverRelation', s.caregiverRelation), 'caregiverRelation', { req: true, basis: '1 1 180px', id: 'cg-relation-wrap' }) +
+          '</div>' +
         '</div>';
     }
 
@@ -392,6 +455,35 @@ SDMIS.formWizard = (function () {
         if (!$rows.children('.rep-row').length) $rows.html('<p class="text-xs text-slate-400 rep-empty">None added</p>');
       });
 
+      // DOB → auto-calculate age (age stays editable for cases where DOB is unknown)
+      $('#sec-1 [name=dob]').on('change', function () {
+        var v = $(this).val();
+        if (!v) return;
+        var d = new Date(v), now = new Date();
+        if (isNaN(d.getTime())) return;
+        var age = now.getFullYear() - d.getFullYear();
+        var m = now.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
+        if (age >= 0 && age <= 120) $('#sec-1 [name=age]').val(age);
+      });
+
+      // Residency / COI toggle (Sikkimese → COI/RC/SSE, Non-Sikkimese → ID proof)
+      function refreshResidency() {
+        var r = $('#sec-1 [name=residency]:checked').val() || 'local';
+        $('#coi-wrap').toggle(r === 'local');
+        $('#idproof-wrap').toggle(r !== 'local');
+      }
+      $('#sec-1').on('change', '[name=residency]', refreshResidency);
+      refreshResidency();
+
+      // Permanent address: shown only when NOT same as present address
+      function refreshPermAddr() {
+        var same = $('#sec-1 [name=permSameAsCurrent]:checked').val() || 'Yes';
+        $('#perm-addr-wrap').toggle(same === 'No');
+      }
+      $('#sec-1').on('change', '[name=permSameAsCurrent]', refreshPermAddr);
+      refreshPermAddr();
+
       // photo upload
       $('#photo-input').on('change', function () { readImage(this, '#photo-preview', function (b64) { rec.step1.photo = b64; }); });
     }
@@ -403,6 +495,7 @@ SDMIS.formWizard = (function () {
         $('#occ-post-wrap').toggle(occ === 'Government Employee');
         $('#occ-emptype-wrap').toggle(occ === 'Government Employee');
         $('#occ-biz-wrap').toggle(occ === 'Self Employed');
+        $('#occ-place-wrap').toggle(occ === 'Private');
         $('#occ-emprem-wrap').toggle(occ === 'Government Employee' && $('[name=employmentType]').val() === 'Others');
       }
       $('[name=education], [name=occupation], [name=employmentType]').on('change', refresh);
@@ -424,9 +517,23 @@ SDMIS.formWizard = (function () {
         $('#dis-other-wrap').toggle(dt === 'Others');
         var aidsChecked = $('[name=aids]:checked').map(function () { return $(this).val(); }).get();
         $('#aids-other-wrap').toggle(aidsChecked.indexOf('Other') > -1);
-        $('#pension-since-wrap').toggle($('[name=pensionStatus]').val() === 'Yes');
+
+        // pension: schemes + since shown only when "Yes"
+        var pension = $('#sec-4 [name=pensionStatus]:checked').val();
+        $('#pension-detail-wrap').toggle(pension === 'Yes');
+
+        // caregiver: details shown only when "Yes"; salary vs relation by type
+        var cgPresent = $('#sec-4 [name=caregiverPresent]:checked').val();
+        $('#caregiver-detail-wrap').toggle(cgPresent === 'Yes');
+        var cgType = $('#sec-4 [name=caregiverType]').val();
+        var hired = cgType === 'Hired' || cgType === 'Professional';
+        $('#cg-salary-wrap').toggle(cgPresent === 'Yes' && hired);
+        $('#cg-relation-wrap').toggle(cgPresent === 'Yes' && cgType === 'Family Member');
       }
-      $('[name=disabilityType], [name=suspectedDisabilityType], [name=aids], [name=pensionStatus]').on('change', refresh);
+      $('#sec-4').on('change', '[name=disabilityType], [name=suspectedDisabilityType], [name=aids], [name=pensionStatus], [name=caregiverPresent], [name=caregiverType]', refresh);
+      // UDID: digits only, exactly 18
+      $('#sec-4').on('input', '[name=udid]', function () { this.value = this.value.replace(/\D/g, '').slice(0, 18); });
+      ui.enhanceMultiSelects($('#sec-4'));
       refresh();
       if (formType === 'A') {
         $('#cert-input').on('change', function () { readImage(this, '#cert-preview', function (b64) { rec.step4A.certImage = b64; }); });
@@ -451,7 +558,7 @@ SDMIS.formWizard = (function () {
         var d = ui.collect($body);
         var $enum = $('#wiz-body [name="enumeratorId"]');
         if ($enum.length) rec.enumeratorId = $enum.val() || null;
-        ['surveyDate', 'name', 'parentName', 'age', 'gender', 'address', 'gpu', 'ward', 'houseNo', 'pin', 'contact', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiNo', 'rcNo', 'sikkimSubjectNo', 'idProofNo'].forEach(function (k) {
+        ['surveyDate', 'name', 'fatherName', 'motherName', 'dob', 'age', 'gender', 'address', 'permSameAsCurrent', 'permanentAddress', 'gpu', 'block', 'ward', 'houseNo', 'pin', 'contact', 'altMobile', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiDocType', 'coiDocNo', 'idProofNo'].forEach(function (k) {
           if (typeof d[k] !== 'undefined') rec.step1[k] = d[k];
         });
         rec.gpu = rec.step1.gpu; rec.ward = rec.step1.ward;
@@ -467,8 +574,9 @@ SDMIS.formWizard = (function () {
       } else if (n === 4) {
         var target = formType === 'A' ? rec.step4A : rec.step4B;
         var d4 = ui.collect($body);
+        var arrayKeys = { aids: 1, services: 1, pensionSchemes: 1 };
         Object.keys(target).forEach(function (k) {
-          if (k === 'aids') target.aids = d4.aids || [];
+          if (arrayKeys[k]) target[k] = d4[k] || [];
           else if (k === 'certImage') { /* handled by file reader */ }
           else if (typeof d4[k] !== 'undefined') target[k] = d4[k];
         });
@@ -500,14 +608,25 @@ SDMIS.formWizard = (function () {
         $('#wiz-body input, #wiz-body select, #wiz-body textarea').removeClass('border-rose-400');
       }
 
+      // Form B mandatory set (req #13): Name, Address, Contact, Type of Disability only.
+      // Steps 2 & 3 are optional for Form B.
+      var isB = formType === 'B';
+
       if (n === 1) {
         var s = rec.step1;
         if (zone && (zone.enumerators || []).length && !rec.enumeratorId) fail('enumeratorId', 'Select the enumerator who collected this survey');
-        ['name', 'parentName', 'age', 'gender', 'address', 'gpu', 'ward', 'pin', 'contact', 'aadhaar', 'altContactName', 'altContactNo'].forEach(function (k) {
-          if (!String(s[k] || '').trim()) fail(k);
-        });
+        if (!String(s.name || '').trim()) fail('name');
+        if (!String(s.address || '').trim()) fail('address');
+        if (s.permSameAsCurrent === 'No' && !String(s.permanentAddress || '').trim()) fail('permanentAddress', 'Enter the permanent address');
+        if (isB) {
+          if (!String(s.contact || '').trim()) fail('contact');   // contact mandatory only for Form B
+        } else {
+          if (!String(s.gender || '').trim()) fail('gender');     // gender mandatory for Form A
+        }
+        // soft format checks (only when a value is present — fields themselves are optional now)
         if (s.pin && !/^\d{6}$/.test(s.pin)) fail('pin', 'PIN must be 6 digits');
       } else if (n === 2) {
+        if (isB) return ok;   // qualification not mandatory for Form B
         var s2 = rec.step2;
         if (!s2.education) fail('education');
         if (s2.education === 'Others' && !s2.educationOther.trim()) fail('educationOther', 'Specify education');
@@ -517,9 +636,11 @@ SDMIS.formWizard = (function () {
           if (!s2.employmentType) fail('employmentType', 'Required for Govt employee');
           if (s2.employmentType === 'Others' && !s2.employmentRemark.trim()) fail('employmentRemark', 'Specify employment type');
         }
+        if (s2.occupation === 'Private' && !s2.placeOfEmployment.trim()) fail('placeOfEmployment', 'Required for private occupation');
         if (s2.occupation === 'Self Employed' && !s2.businessName.trim()) fail('businessName', 'Required for self employed');
         if (!s2.annualIncome) fail('annualIncome');
       } else if (n === 3) {
+        if (isB) return ok;   // family info not mandatory for Form B
         var s3 = rec.step3;
         if (!s3.houseType) fail('houseType');
         if (!String(s3.familyCount).trim() || parseInt(s3.familyCount, 10) < 1) fail('familyCount', 'Enter a valid number');
@@ -533,10 +654,23 @@ SDMIS.formWizard = (function () {
           if (a.udid && a.udid.length !== 18) fail('udid', 'UDID must be 18 characters');
           if (!a.aids.length) fail('aids', 'Select at least one (or include applicable)');
           if (a.aids.indexOf('Other') > -1 && !a.aidsOther.trim()) fail('aidsOther', 'Specify other aid');
+          validateCaregiver(a);
         } else {
           var b = rec.step4B;
-          if (!b.suspectedDisabilityType) fail('suspectedDisabilityType');
+          if (!b.suspectedDisabilityType) fail('suspectedDisabilityType', 'Type of disability is required');
           if (b.suspectedDisabilityType === 'Others' && !b.disabilityOther.trim()) fail('disabilityOther', 'Specify disability');
+          validateCaregiver(b);
+        }
+      }
+      // caregiver conditional rules (req #16) — only when the user opted into a caregiver
+      function validateCaregiver(s4) {
+        if (s4.caregiverPresent !== 'Yes') return;
+        if (!s4.caregiverType) { fail('caregiverType', 'Select caregiver type'); return; }
+        if ((s4.caregiverType === 'Hired' || s4.caregiverType === 'Professional') && !String(s4.caregiverSalary || '').trim()) {
+          fail('caregiverSalary', 'Enter salary / fee paid');
+        }
+        if (s4.caregiverType === 'Family Member' && !String(s4.caregiverRelation || '').trim()) {
+          fail('caregiverRelation', 'Mention the relation');
         }
       }
       return ok;
@@ -601,6 +735,19 @@ SDMIS.formWizard = (function () {
     function section(title, inner) {
       return '<div class="mb-5"><h4 class="text-sm font-semibold text-indigo-600 mb-1 uppercase tracking-wide">' + title + '</h4><div>' + inner + '</div></div>';
     }
+    // pension + caregiver read-only rows (shared by Form A / B)
+    function pensionRows(s4) {
+      return row('Pension', s4.pensionStatus + (s4.pensionSince ? ' since ' + s4.pensionSince : '')) +
+        (s4.pensionStatus === 'Yes' ? row('Pension Scheme(s)', s4.pensionSchemes) : '');
+    }
+    function caregiverRows(s4) {
+      if (s4.caregiverPresent !== 'Yes') return row('Caregiver', s4.caregiverPresent === 'No' ? 'No' : '—');
+      var detail = s4.caregiverType === 'Family Member'
+        ? 'Relation: ' + (s4.caregiverRelation || '—')
+        : 'Salary / Fee: ' + (s4.caregiverSalary || '—');
+      return row('Caregiver', [s4.caregiverType, s4.caregiverName].filter(Boolean).join(' — ') || 'Yes') +
+        row('Caregiver Detail', detail);
+    }
     var s1 = rec.step1, s2 = rec.step2, s3 = rec.step3;
     var fam = (s1.offsprings || []).map(function (o) { return o.age + '/' + o.gender; }).join(', ');
     var sib = (s1.siblings || []).map(function (o) { return o.age + '/' + o.gender; }).join(', ');
@@ -617,19 +764,26 @@ SDMIS.formWizard = (function () {
         row('Name', en.name) + row('AWC', en.awc) + row('Project', en.project) + row('District', en.district) + row('Contact', en.contact)
       ) +
       section('Personal Information',
-        row('Name', s1.name) + row("Father's/Mother's Name", s1.parentName) + row('Age', s1.age) + row('Gender', s1.gender) +
-        row('Address', s1.address) + row('GPU', s1.gpu) + row('Ward', s1.ward) + row('House No.', s1.houseNo) +
-        row('PIN', s1.pin) + row('Contact', s1.contact) + row('Aadhaar', s1.aadhaar) + row('Voter ID', s1.voterId) +
-        row('Additional Contact', s1.altContactName + ' / ' + s1.altContactNo) +
+        row('Name', s1.name) + row("Father's Name", s1.fatherName || s1.parentName) + row("Mother's Name", s1.motherName) +
+        row('Date of Birth', s1.dob) + row('Age', s1.age) + row('Gender', s1.gender) +
+        row('Present Address', s1.address) +
+        row('Permanent Address', s1.permSameAsCurrent === 'No' ? s1.permanentAddress : 'Same as present address') +
+        row('GPU', s1.gpu) + row('Block', s1.block) + row('Ward', s1.ward) + row('House No.', s1.houseNo) +
+        row('PIN', s1.pin) + row('Contact', s1.contact) + row('Alternate Mobile', s1.altMobile) +
+        row('Aadhaar', s1.aadhaar) + row('Voter ID', s1.voterId) +
+        row('Additional Contact', [s1.altContactName, s1.altContactNo].filter(Boolean).join(' / ')) +
         row('Offsprings', fam) + row('Siblings', sib) +
-        row('Residency', s1.residency === 'local' ? 'Local' : 'Non-Local') +
-        (s1.residency === 'local' ? row('COI / RC / Sikkim Subject', [s1.coiNo, s1.rcNo, s1.sikkimSubjectNo].filter(Boolean).join(' · ')) : row('ID Proof', s1.idProofNo)) +
+        row('Residency', s1.residency === 'local' ? 'Sikkimese (Local)' : 'Non-Sikkimese (Non-Local)') +
+        (s1.residency === 'local'
+          ? row('COI / RC / SSE', [s1.coiDocType, s1.coiDocNo].filter(Boolean).join(': ') || [s1.coiNo, s1.rcNo, s1.sikkimSubjectNo].filter(Boolean).join(' · '))
+          : row('ID Proof', s1.idProofNo)) +
         row('Marital Status', s1.maritalStatus) +
         (s1.photo ? '<div class="mt-2"><img src="' + s1.photo + '" class="h-24 rounded border"></div>' : '')
       ) +
       section('Qualification & Occupation',
         row('Education', s2.education + (s2.educationOther ? ' (' + s2.educationOther + ')' : '')) + row('Institute', s2.institute) +
         row('Occupation', s2.occupation) + row('Post Name', s2.postName) + row('Employment Type', s2.employmentType + (s2.employmentRemark ? ' (' + s2.employmentRemark + ')' : '')) +
+        row('Place of Employment', s2.placeOfEmployment) +
         row('Business Name', s2.businessName) + row('Annual Income', s2.annualIncome)
       ) +
       section('Family Information',
@@ -644,9 +798,9 @@ SDMIS.formWizard = (function () {
         row('Disability %', a.disabilityPercent) + row('Certificate No.', a.certNo) + row('UDID', a.udid) +
         row('Issue Date', a.issueDate) + row('Place of Issue', a.issuePlace) +
         row('Aids & Appliances', a.aids) + (a.aidsOther ? row('Other Aid', a.aidsOther) : '') +
-        row('Benefits', a.benefits) + row('Pension', a.pensionStatus + (a.pensionSince ? ' since ' + a.pensionSince : '')) +
+        row('Benefits', a.benefits) + pensionRows(a) +
         row('Medical Problems', a.medicalProblems + (a.medicalSince ? ' since ' + a.medicalSince : '')) +
-        row('Services', a.services) + row('Care Giver', a.caregiverName + ' (' + a.caregiverRelation + ')') +
+        row('Services', a.services) + caregiverRows(a) +
         (a.certImage ? '<div class="mt-2"><img src="' + a.certImage + '" class="h-24 rounded border"></div>' : '')
       );
     } else if (rec.step4B) {
@@ -654,9 +808,9 @@ SDMIS.formWizard = (function () {
       html += section('Suspected Disability Information',
         row('Suspected Disability Type', b.suspectedDisabilityType + (b.disabilityOther ? ' (' + b.disabilityOther + ')' : '')) +
         row('Aids & Appliances', b.aids) + (b.aidsOther ? row('Other Aid', b.aidsOther) : '') +
-        row('Benefits', b.benefits) + row('Pension', b.pensionStatus) +
+        row('Benefits', b.benefits) + pensionRows(b) +
         row('Medical Problems', b.medicalProblems + (b.medicalSince ? ' since ' + b.medicalSince : '')) +
-        row('Services', b.services) + row('Care Giver', b.caregiverName + ' (' + b.caregiverRelation + ')')
+        row('Services', b.services) + caregiverRows(b)
       );
     }
     return html;

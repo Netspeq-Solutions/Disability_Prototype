@@ -204,7 +204,7 @@ SDMIS.router.register('swo', {
       if (!rec || rec.formType !== 'B') return;
       var body =
         '<p class="text-sm text-slate-500 mb-3">Enter the certified disability details. Steps 1–3 (Personal, Qualification, Family) will be carried over automatically.</p>' +
-        ui.field('Disability Type', ui.select('disabilityType', C.disabilityType, rec.step4B.suspectedDisabilityType), { required: true, name: 'disabilityType' }) +
+        ui.field('Disability Type', ui.select('disabilityType', store.master('disabilityType'), rec.step4B.suspectedDisabilityType), { required: true, name: 'disabilityType' }) +
         ui.field('Disability Percentage (%)', ui.text('disabilityPercent', '', { type: 'number', attrs: 'min=0 max=100' }), { required: true, name: 'disabilityPercent' }) +
         ui.field('Disability Certificate Number', ui.text('certNo', ''), { required: true, name: 'certNo' }) +
         ui.field('UDID Number', ui.text('udid', '', { attrs: 'maxlength=18' }), { name: 'udid', hint: '18-character alphanumeric (optional now)' }) +
@@ -237,11 +237,15 @@ SDMIS.router.register('swo', {
             aids: (rec.step4B && rec.step4B.aids) || [], aidsOther: (rec.step4B && rec.step4B.aidsOther) || '',
             benefits: (rec.step4B && rec.step4B.benefits) || '',
             pensionStatus: (rec.step4B && rec.step4B.pensionStatus) || '',
+            pensionSchemes: (rec.step4B && rec.step4B.pensionSchemes) || [],
             pensionSince: (rec.step4B && rec.step4B.pensionSince) || '',
             medicalProblems: (rec.step4B && rec.step4B.medicalProblems) || '',
             medicalSince: (rec.step4B && rec.step4B.medicalSince) || '',
-            services: (rec.step4B && rec.step4B.services) || '',
+            services: (rec.step4B && rec.step4B.services) || [],
+            caregiverPresent: (rec.step4B && rec.step4B.caregiverPresent) || '',
+            caregiverType: (rec.step4B && rec.step4B.caregiverType) || '',
             caregiverName: (rec.step4B && rec.step4B.caregiverName) || '',
+            caregiverSalary: (rec.step4B && rec.step4B.caregiverSalary) || '',
             caregiverRelation: (rec.step4B && rec.step4B.caregiverRelation) || ''
           };
           store.insert('beneficiaries', newRec);

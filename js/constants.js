@@ -28,13 +28,15 @@ SDMIS.constants = {
   maritalStatus: ['Single', 'Married', 'Widowed', 'Divorced', 'Separated'],
 
   residency: [
-    { value: 'local', label: 'Local' },
-    { value: 'nonlocal', label: 'Non-Local' }
+    { value: 'local', label: 'Sikkimese (Local)' },
+    { value: 'nonlocal', label: 'Non-Sikkimese (Non-Local)' }
   ],
+
+  coiDocTypes: ['COI', 'RC', 'SSE'],
 
   education: ['Below 8', 'Class X', 'Class XII', 'Graduate', 'Post Graduate', 'Others'],
 
-  occupation: ['Government Employee', 'Private Employee', 'Self Employed', 'Unemployed'],
+  occupation: ['Government Employee', 'Private', 'Self Employed', 'Unemployed'],
 
   employmentType: ['Regular', 'Contractual', 'Adhoc', 'Others'],
 
@@ -63,6 +65,41 @@ SDMIS.constants = {
   ],
 
   pensionStatus: ['Yes', 'No'],
+
+  // ---- Pension schemes (admin-configurable master) ----
+  pensionSchemes: [
+    'Indira Gandhi National Disability Pension Scheme (IGNDPS)',
+    'Indira Gandhi National Old Age Pension Scheme (IGNOAPS)',
+    'Indira Gandhi National Widow Pension Scheme (IGNWPS)',
+    'State Disability Pension',
+    'State Old Age Pension',
+    'CMs Welfare Fund for PwD'
+  ],
+
+  // ---- Services receiving (admin-configurable master) ----
+  services: [
+    'Physiotherapy',
+    'Occupational Therapy',
+    'Speech Therapy',
+    'Special Education',
+    'Vocational Training',
+    'Counselling / Psychological Support',
+    'Home-based Care',
+    'Aids & Appliances Support',
+    'Day Care Centre',
+    'Residential Care'
+  ],
+
+  // ---- Caregiver types (admin-configurable master) ----
+  caregiverTypes: ['Family Member', 'Hired', 'Professional'],
+
+  // keys exposed in the Admin → Masters tab (label + which collection drives a form dropdown)
+  masterKeys: [
+    { key: 'disabilityType', label: 'Disability Types' },
+    { key: 'pensionSchemes', label: 'Pension Schemes' },
+    { key: 'services', label: 'Services Receiving' },
+    { key: 'caregiverTypes', label: 'Caregiver Types' }
+  ],
 
   ageGroups: [
     { value: '0-5', label: '0 - 5 yrs', min: 0, max: 5 },

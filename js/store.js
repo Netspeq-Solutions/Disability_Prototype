@@ -11,6 +11,7 @@ SDMIS.store = (function () {
     officials: [],
     beneficiaries: [],
     auditLog: [],
+    masters: {},     // admin-configurable dropdown lists (disability types, schemes, services, caregiver types)
     prefs: {},       // misc UI prefs (e.g. selected survey per inspector)
     session: null    // current user id
   };
@@ -120,6 +121,41 @@ SDMIS.store = (function () {
     write(db);
   }
 
+  // ---- masters (admin-configurable dropdown lists) ----
+  // Each master is a list of { id, name } records. Dropdowns use the NAME as the
+  // stored value (keeps records/reports human-readable); the ID is a stable key
+  // used by the Admin editor. Legacy string-array masters are normalised on read.
+  function slugId(key, name, i) {
+    var base = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return base || (key + '-' + i);
+  }
+  // Full { id, name } records — used by the Admin configuration screens.
+  function masterItems(key) {
+    var raw = (read().masters || {})[key];
+    if (!Array.isArray(raw)) {
+      var C = SDMIS.constants || {};
+      raw = Array.isArray(C[key]) ? C[key] : [];
+    }
+    return raw.map(function (it, i) {
+      if (it && typeof it === 'object') return { id: it.id || slugId(key, it.name, i), name: it.name };
+      return { id: slugId(key, it, i), name: it };
+    });
+  }
+  // Just the names — used to populate form dropdowns / comparisons.
+  function master(key) {
+    return masterItems(key).map(function (it) { return it.name; });
+  }
+  // Options for ui.select / ui.multiSelect (value = name, label = name).
+  function masterOptions(key) {
+    return masterItems(key).map(function (it) { return { value: it.name, label: it.name }; });
+  }
+  function setMasterItems(key, items) {
+    var db = read();
+    if (!db.masters) db.masters = {};
+    db.masters[key] = items;
+    write(db);
+  }
+
   // ---- bulk seed (used once by seed.js) ----
   function seedDb(data) {
     var db = read();
@@ -127,6 +163,7 @@ SDMIS.store = (function () {
     db.zones = data.zones;
     db.officials = data.officials;
     db.beneficiaries = data.beneficiaries;
+    db.masters = data.masters || {};
     db.seeded = true;
     write(db);
   }
@@ -155,6 +192,10 @@ SDMIS.store = (function () {
     getSession: getSession,
     getPref: getPref,
     setPref: setPref,
+    master: master,
+    masterItems: masterItems,
+    masterOptions: masterOptions,
+    setMasterItems: setMasterItems,
     audit: audit,
     seedDb: seedDb,
     isSeeded: isSeeded,

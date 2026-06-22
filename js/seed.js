@@ -92,7 +92,7 @@ SDMIS.seed = (function () {
     var y = 104, step = 30, inner = '';
     inner += '<text x="22" y="' + (y - 8) + '" font-family="Georgia, serif" font-size="10" font-weight="700" fill="#1e3a8a">(a) Personal Information</text>';
     inner += formField(y, 'Name', s.name); y += step;
-    inner += formField(y, "Father/Mother", s.parentName); y += step;
+    inner += formField(y, "Father/Mother", s.fatherName || s.parentName); y += step;
     inner += formField(y, 'Age / Gender', s.age + ' / ' + s.gender); y += step;
     inner += formField(y, 'Address', s.address); y += step;
     inner += formField(y, 'GPU / Ward', s.gpu + ' / ' + s.ward); y += step;
@@ -229,6 +229,7 @@ SDMIS.seed = (function () {
     var age = ri(3, 78);
     var gender = rand(C.gender.slice(0, 2));
     var residency = Math.random() > 0.25 ? 'local' : 'nonlocal';
+    var coiType = residency === 'local' ? rand(C.coiDocTypes) : '';
     var occupation = rand(C.occupation);
 
     var step2 = {
@@ -239,6 +240,7 @@ SDMIS.seed = (function () {
       postName: occupation === 'Government Employee' ? rand(['Clerk', 'Teacher', 'Office Asst.']) : '',
       employmentType: occupation === 'Government Employee' ? rand(C.employmentType) : '',
       employmentRemark: '',
+      placeOfEmployment: occupation === 'Private' ? rand(['Hotel Sikkim', 'XYZ Pvt Ltd', 'Himalayan Traders', 'Apex Constructions']) : '',
       businessName: occupation === 'Self Employed' ? rand(['General Store', 'Tailoring', 'Dairy']) : '',
       annualIncome: rand(C.annualIncome)
     };
@@ -262,15 +264,22 @@ SDMIS.seed = (function () {
       enumeratorId: (zone.enumerators && zone.enumerators.length) ? rand(zone.enumerators).id : null,
       step1: {
         name: fullName(i + 7),
-        parentName: fullName(i + 50),
+        parentName: '',
+        fatherName: fullName(i + 50),
+        motherName: fullName(i + 65),
+        dob: '',
         age: age,
         gender: gender,
         address: rand(zone.gpus) + ', ' + zone.name,
+        permSameAsCurrent: Math.random() > 0.3 ? 'Yes' : 'No',
+        permanentAddress: rand(zone.gpus) + ' (native), ' + zone.name,
         gpu: rand(zone.gpus),
+        block: zone.name + ' Block',
         ward: rand(zone.wards),
         houseNo: 'H-' + ri(1, 120),
         pin: '73710' + ri(1, 9),
         contact: '9' + ri(100000000, 899999999),
+        altMobile: Math.random() > 0.5 ? '7' + ri(100000000, 899999999) : '',
         altContactName: fullName(i + 30),
         altContactNo: '8' + ri(100000000, 899999999),
         aadhaar: '' + ri(2000, 9999) + ' ' + ri(1000, 9999) + ' ' + ri(1000, 9999),
@@ -278,9 +287,8 @@ SDMIS.seed = (function () {
         offsprings: age > 25 ? [{ age: ri(1, 20), gender: rand(C.gender) }] : [],
         siblings: [{ age: ri(2, 40), gender: rand(C.gender) }],
         residency: residency,
-        coiNo: residency === 'local' ? 'COI/' + ri(1000, 9999) : '',
-        rcNo: '',
-        sikkimSubjectNo: residency === 'local' ? 'SSC/' + ri(100, 999) : '',
+        coiDocType: coiType,
+        coiDocNo: coiType ? coiType + '/' + ri(1000, 9999) : '',
         idProofNo: residency === 'nonlocal' ? 'PAN/ABCDE' + ri(1000, 9999) + 'X' : '',
         maritalStatus: age >= 18 ? rand(C.maritalStatus) : 'Single',
         photo: ''
@@ -300,8 +308,32 @@ SDMIS.seed = (function () {
     var aids = C.aids.slice(0, C.aids.length - 1).filter(function () { return Math.random() > 0.7; });
     var disType = rand(C.disabilityType);
 
+    // caregiver: ~60% have one; type drives salary vs relation
+    function buildCaregiver() {
+      var present = Math.random() > 0.4 ? 'Yes' : 'No';
+      if (present !== 'Yes') {
+        return { caregiverPresent: 'No', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' };
+      }
+      var type = rand(C.caregiverTypes);
+      var hired = type === 'Hired' || type === 'Professional';
+      return {
+        caregiverPresent: 'Yes',
+        caregiverType: type,
+        caregiverName: fullName(i + 80),
+        caregiverSalary: hired ? '₹' + (ri(3, 12) * 1000) + '/month' : '',
+        caregiverRelation: hired ? '' : rand(['Father', 'Mother', 'Sibling', 'Spouse', 'Guardian'])
+      };
+    }
+    function pickServices() {
+      return C.services.filter(function () { return Math.random() > 0.78; });
+    }
+    function pickSchemes(status) {
+      return status === 'Yes' ? C.pensionSchemes.filter(function () { return Math.random() > 0.6; }).slice(0, 2) : [];
+    }
+
     if (formType === 'A') {
-      rec.step4A = {
+      var penA = rand(C.pensionStatus);
+      rec.step4A = Object.assign({
         disabilityType: disType,
         disabilityOther: disType === 'Others' ? 'Rare neurological condition' : '',
         disabilityPercent: ri(40, 100),
@@ -313,33 +345,41 @@ SDMIS.seed = (function () {
         aids: aids,
         aidsOther: '',
         benefits: rand(['Disability Pension', 'Scholarship', 'None', 'Bus Pass']),
-        pensionStatus: rand(C.pensionStatus),
-        pensionSince: '20' + ri(16, 23),
+        pensionStatus: penA,
+        pensionSchemes: pickSchemes(penA),
+        pensionSince: penA === 'Yes' ? '20' + ri(16, 23) : '',
         medicalProblems: rand(['', '', 'Hypertension', 'Diabetes', 'Epilepsy']),
         medicalSince: '20' + ri(15, 23),
-        services: rand(['', 'Physiotherapy', 'Special education']),
-        caregiverName: fullName(i + 80),
-        caregiverRelation: rand(['Father', 'Mother', 'Sibling', 'Spouse', 'Guardian'])
-      };
+        services: pickServices()
+      }, buildCaregiver());
     } else {
-      rec.step4B = {
+      rec.step4B = Object.assign({
         suspectedDisabilityType: disType,
         disabilityOther: disType === 'Others' ? 'Suspected developmental delay' : '',
         aids: aids,
         aidsOther: '',
         benefits: rand(['None', 'Awaiting certification']),
         pensionStatus: 'No',
+        pensionSchemes: [],
         pensionSince: '',
         medicalProblems: rand(['', 'Frequent seizures', 'Mobility difficulty']),
         medicalSince: '20' + ri(18, 23),
-        services: rand(['', 'Under observation']),
-        caregiverName: fullName(i + 80),
-        caregiverRelation: rand(['Father', 'Mother', 'Sibling', 'Guardian'])
-      };
+        services: pickServices()
+      }, buildCaregiver());
     }
 
     attachDemoImages(rec);
     return rec;
+  }
+
+  // Seed the admin-configurable master lists from the constants defaults
+  function buildMasters() {
+    var C = SDMIS.constants;
+    var out = {};
+    (C.masterKeys || []).forEach(function (m) {
+      out[m.key] = (C[m.key] || []).map(function (name) { return { id: store.uid('mst'), name: name }; });
+    });
+    return out;
   }
 
   function buildSurveys() {
@@ -382,11 +422,54 @@ SDMIS.seed = (function () {
   function migrate() {
     if (!store.isSeeded()) return;
     var db = store.read();
+    var C = SDMIS.constants;
     var changed = false;
     if (!db.surveys || !db.surveys.length) {
       db.surveys = buildSurveys();
       changed = true;
     }
+    // Backfill admin-configurable masters as { id, name } records
+    if (!db.masters) { db.masters = {}; changed = true; }
+    (C.masterKeys || []).forEach(function (m) {
+      var cur = db.masters[m.key];
+      if (!Array.isArray(cur)) {
+        db.masters[m.key] = (C[m.key] || []).map(function (name) { return { id: store.uid('mst'), name: name }; });
+        changed = true;
+      } else if (cur.length && typeof cur[0] !== 'object') {
+        // legacy string-array → { id, name }
+        db.masters[m.key] = cur.map(function (name) { return { id: store.uid('mst'), name: name }; });
+        changed = true;
+      }
+    });
+    // Backfill new fields introduced by the enhanced form (split parents, DOB, block, etc.)
+    (db.beneficiaries || []).forEach(function (r) {
+      var s1 = r.step1 || {};
+      if (typeof s1.fatherName === 'undefined') { s1.fatherName = s1.parentName || ''; changed = true; }
+      if (typeof s1.motherName === 'undefined') { s1.motherName = ''; changed = true; }
+      ['dob', 'altMobile', 'block', 'permanentAddress'].forEach(function (k) { if (typeof s1[k] === 'undefined') { s1[k] = ''; changed = true; } });
+      if (typeof s1.permSameAsCurrent === 'undefined') { s1.permSameAsCurrent = 'Yes'; changed = true; }
+      // legacy addressType is no longer used
+      if (typeof s1.coiDocType === 'undefined') {
+        if (s1.coiNo) { s1.coiDocType = 'COI'; s1.coiDocNo = s1.coiNo; }
+        else if (s1.rcNo) { s1.coiDocType = 'RC'; s1.coiDocNo = s1.rcNo; }
+        else if (s1.sikkimSubjectNo) { s1.coiDocType = 'SSE'; s1.coiDocNo = s1.sikkimSubjectNo; }
+        else { s1.coiDocType = ''; s1.coiDocNo = ''; }
+        changed = true;
+      }
+      if (r.step2 && typeof r.step2.placeOfEmployment === 'undefined') { r.step2.placeOfEmployment = ''; changed = true; }
+      [r.step4A, r.step4B].forEach(function (s4) {
+        if (!s4) return;
+        if (typeof s4.services === 'string') { s4.services = s4.services ? [s4.services] : []; changed = true; }
+        if (typeof s4.services === 'undefined') { s4.services = []; changed = true; }
+        if (typeof s4.pensionSchemes === 'undefined') { s4.pensionSchemes = []; changed = true; }
+        if (typeof s4.caregiverPresent === 'undefined') {
+          s4.caregiverPresent = s4.caregiverName ? 'Yes' : 'No';
+          s4.caregiverType = s4.caregiverName ? 'Family Member' : '';
+          s4.caregiverSalary = '';
+          changed = true;
+        }
+      });
+    });
     var active = db.surveys.filter(function (s) { return s.status === 'active'; })[0] || db.surveys[0];
     (db.beneficiaries || []).forEach(function (r) {
       if (!r.surveyId) { r.surveyId = active.id; changed = true; }
@@ -425,7 +508,7 @@ SDMIS.seed = (function () {
     var zones = buildZones();
     var officials = buildOfficials(zones);
     var beneficiaries = buildBeneficiaries(zones, officials, activeSurvey.id);
-    store.seedDb({ surveys: surveys, zones: zones, officials: officials, beneficiaries: beneficiaries });
+    store.seedDb({ surveys: surveys, zones: zones, officials: officials, beneficiaries: beneficiaries, masters: buildMasters() });
     console.log('SDMIS seeded:', surveys.length, 'surveys,', zones.length, 'zones,', officials.length, 'officials,', beneficiaries.length, 'records');
   }
 
