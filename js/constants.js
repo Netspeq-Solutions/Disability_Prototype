@@ -34,6 +34,9 @@ SDMIS.constants = {
 
   coiDocTypes: ['COI', 'RC', 'SSE'],
 
+  // Disability certificate type — Permanent requires a UDID number; Temporary does not
+  certificateTypes: ['Temporary', 'Permanent'],
+
   education: ['Below 8', 'Class X', 'Class XII', 'Graduate', 'Post Graduate', 'Others'],
 
   occupation: ['Government Employee', 'Private', 'Self Employed', 'Unemployed'],
