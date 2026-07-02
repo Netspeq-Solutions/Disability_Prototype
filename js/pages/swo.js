@@ -205,9 +205,9 @@ SDMIS.router.register('swo', {
       var body =
         '<p class="text-sm text-slate-500 mb-3">Enter the certified disability details. Steps 1–3 (Personal, Qualification, Family) will be carried over automatically.</p>' +
         ui.field('Disability Type', ui.select('disabilityType', store.master('disabilityType'), rec.step4B.suspectedDisabilityType), { required: true, name: 'disabilityType' }) +
-        ui.field('Disability Percentage (%)', ui.text('disabilityPercent', '', { type: 'number', attrs: 'min=0 max=100' }), { required: true, name: 'disabilityPercent' }) +
-        ui.field('Disability Certificate Number', ui.text('certNo', ''), { required: true, name: 'certNo' }) +
-        ui.field('UDID Number', ui.text('udid', '', { attrs: 'maxlength=18' }), { name: 'udid', hint: '18-character alphanumeric (optional now)' }) +
+        ui.field('Disability Percentage (%)', ui.text('disabilityPercent', '', { type: 'number', attrs: 'min=0 max=100' }), { name: 'disabilityPercent' }) +
+        ui.field('Certificate Type', ui.select('certType', C.certificateTypes, ''), { required: true, name: 'certType' }) +
+        ui.field('UDID Number', ui.text('udid', '', { attrs: 'inputmode="numeric" maxlength=18' }), { name: 'udid', hint: '18 digits — required for a Permanent certificate' }) +
         ui.field('Certificate Issue Date', ui.text('issueDate', '', { type: 'date' }), { name: 'issueDate' }) +
         ui.field('Place of Issue', ui.text('issuePlace', ''), { name: 'issuePlace' });
 
@@ -215,11 +215,14 @@ SDMIS.router.register('swo', {
         title: 'Convert Form B → Form A', confirmText: 'Convert', wide: true, bodyHtml: body,
         onConfirm: function () {
           var d = ui.collect($('#modal-body'));
-          if (!d.disabilityType || !String(d.disabilityPercent).trim() || !d.certNo.trim()) {
-            ui.toast('Disability Type, Percentage and Certificate No. are required', 'error');
+          if (!d.disabilityType || !d.certType) {
+            ui.toast('Disability Type and Certificate Type are required', 'error');
             return false;
           }
-          if (d.udid && d.udid.length !== 18) { ui.toast('UDID must be 18 characters', 'error'); return false; }
+          if (d.certType === 'Permanent') {
+            if (!String(d.udid || '').trim()) { ui.toast('UDID is required for a Permanent certificate', 'error'); return false; }
+            if (d.udid.length !== 18) { ui.toast('UDID must be 18 digits', 'error'); return false; }
+          }
 
           // build the new Form A record, retaining steps 1-3
           var newRec = JSON.parse(JSON.stringify(rec));
@@ -232,8 +235,8 @@ SDMIS.router.register('swo', {
           newRec.step4B = null;
           newRec.step4A = {
             disabilityType: d.disabilityType, disabilityOther: '',
-            disabilityPercent: d.disabilityPercent, certNo: d.certNo, certImage: '',
-            udid: d.udid || '', issueDate: d.issueDate || '', issuePlace: d.issuePlace || '',
+            disabilityPercent: d.disabilityPercent, certType: d.certType, certImage: '',
+            udid: d.certType === 'Permanent' ? (d.udid || '') : '', issueDate: d.issueDate || '', issuePlace: d.issuePlace || '',
             aids: (rec.step4B && rec.step4B.aids) || [], aidsOther: (rec.step4B && rec.step4B.aidsOther) || '',
             benefits: (rec.step4B && rec.step4B.benefits) || '',
             pensionStatus: (rec.step4B && rec.step4B.pensionStatus) || '',

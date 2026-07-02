@@ -108,8 +108,8 @@ SDMIS.seed = (function () {
       var a = rec.step4A || {};
       inner += formField(y, 'Disability', a.disabilityType); y += step;
       inner += formField(y, 'Percentage', a.disabilityPercent + ' %'); y += step;
-      inner += formField(y, 'Certificate', a.certNo); y += step;
-      inner += formField(y, 'UDID No.', a.udid); y += step;
+      inner += formField(y, 'Cert. Type', a.certType || a.certNo); y += step;
+      inner += formField(y, 'UDID No.', a.udid || '—'); y += step;
       inner += formField(y, 'Aids', (a.aids || []).join(', ') || 'None'); y += step;
       inner += formField(y, 'Pension', a.pensionStatus); y += step;
       inner += formField(y, 'Care giver', a.caregiverName); y += step;
@@ -139,8 +139,8 @@ SDMIS.seed = (function () {
       formField(168, 'Name', s.name) +
       formField(198, 'Disability', a.disabilityType) +
       formField(228, 'Percentage', a.disabilityPercent + ' %') +
-      formField(258, 'Certificate', a.certNo) +
-      formField(288, 'UDID No.', a.udid) +
+      formField(258, 'Cert. Type', a.certType || a.certNo) +
+      formField(288, 'UDID No.', a.udid || '—') +
       formField(318, 'Issued at', a.issuePlace) +
       '<circle cx="80" cy="358" r="26" fill="none" stroke="#dc2626" stroke-width="1.5" opacity="0.8"/>' +
       '<text x="80" y="354" font-family="Arial, sans-serif" font-size="6" fill="#dc2626" text-anchor="middle" opacity="0.85">MEDICAL BOARD</text>' +
@@ -333,13 +333,15 @@ SDMIS.seed = (function () {
 
     if (formType === 'A') {
       var penA = rand(C.pensionStatus);
+      var certTypeA = rand(C.certificateTypes);
       rec.step4A = Object.assign({
         disabilityType: disType,
         disabilityOther: disType === 'Others' ? 'Rare neurological condition' : '',
         disabilityPercent: ri(40, 100),
-        certNo: 'DC/' + zone.code + '/' + ri(1000, 9999),
+        certType: certTypeA,
         certImage: '',
-        udid: 'SK' + zone.code + ri(100000000000, 999999999999),
+        // UDID (18 digits) is issued only for a Permanent certificate
+        udid: certTypeA === 'Permanent' ? (String(ri(100000000, 999999999)) + String(ri(100000000, 999999999))) : '',
         issueDate: '20' + ri(15, 23) + '-0' + ri(1, 9) + '-1' + ri(0, 9),
         issuePlace: zone.name + ' District Hospital',
         aids: aids,
@@ -457,6 +459,12 @@ SDMIS.seed = (function () {
         changed = true;
       }
       if (r.step2 && typeof r.step2.placeOfEmployment === 'undefined') { r.step2.placeOfEmployment = ''; changed = true; }
+      // certNo → certType (Permanent when a UDID was recorded, else Temporary)
+      if (r.step4A && typeof r.step4A.certType === 'undefined') {
+        r.step4A.certType = r.step4A.udid ? 'Permanent' : 'Temporary';
+        delete r.step4A.certNo;
+        changed = true;
+      }
       [r.step4A, r.step4B].forEach(function (s4) {
         if (!s4) return;
         if (typeof s4.services === 'string') { s4.services = s4.services ? [s4.services] : []; changed = true; }
