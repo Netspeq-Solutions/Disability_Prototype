@@ -28,8 +28,8 @@ SDMIS.constants = {
   maritalStatus: ['Single', 'Married', 'Widowed', 'Divorced', 'Separated'],
 
   residency: [
-    { value: 'local', label: 'Sikkimese (Local)' },
-    { value: 'nonlocal', label: 'Non-Sikkimese (Non-Local)' }
+    { value: 'local', label: 'Local' },
+    { value: 'nonlocal', label: 'Others' }
   ],
 
   coiDocTypes: ['COI', 'RC', 'SSE'],
