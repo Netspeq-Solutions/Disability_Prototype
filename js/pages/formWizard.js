@@ -21,7 +21,7 @@ SDMIS.formWizard = (function () {
       },
       step2: { education: '', educationOther: '', institute: '', occupation: '', postName: '', employmentType: '', employmentRemark: '', placeOfEmployment: '', businessName: '', annualIncome: '' },
       step3: { houseType: '', familyCount: '', facilities: [], accessibilityDetail: '', language: '' },
-      step4A: formType === 'A' ? { disabilityType: '', disabilityOther: '', disabilityPercent: '', certNo: '', certImage: '', udid: '', issueDate: '', issuePlace: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null,
+      step4A: formType === 'A' ? { disabilityType: '', disabilityOther: '', disabilityPercent: '', certType: '', certImage: '', udid: '', issueDate: '', issuePlace: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null,
       step4B: formType === 'B' ? { suspectedDisabilityType: '', disabilityOther: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null
     };
   }
@@ -158,9 +158,7 @@ SDMIS.formWizard = (function () {
       var gpuOpts = zone ? zone.gpus : [];
       var wardOpts = zone ? zone.wards : [];
 
-      var reqGender = formType === 'A';   // Form B mandatory set: Name, Address, Contact, Disability (req #13)
-      var reqContact = formType === 'B';
-
+      // Mandatory for BOTH Form A & B: Name, Gender, Present Address, Contact Number (+ Disability Type in step 4)
       return '<div id="sec-1">' +
         // header: survey date (left) + passport photo box (right)
         '<div class="pf-head">' +
@@ -177,7 +175,7 @@ SDMIS.formWizard = (function () {
 
         '<div class="pf-row">' +
           pf('1. Name', ui.text('name', s.name, { attrs: 'style="text-transform:uppercase"' }), 'name', { req: true, basis: '3 1 200px' }) +
-          pf('Gender', ui.select('gender', C.gender, s.gender), 'gender', { req: reqGender, basis: '1 1 120px' }) +
+          pf('Gender', ui.select('gender', C.gender, s.gender), 'gender', { req: true, basis: '1 1 120px' }) +
         '</div>' +
         '<div class="pf-row">' +
           pf('Date of Birth', ui.text('dob', s.dob, { type: 'date' }), 'dob', { basis: '1 1 160px' }) +
@@ -203,7 +201,7 @@ SDMIS.formWizard = (function () {
         pf('Permanent Address', ui.text('permanentAddress', s.permanentAddress), 'permanentAddress', { req: true, block: true, id: 'perm-addr-wrap' }) +
 
         '<div class="pf-row">' +
-          pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: reqContact, basis: '1 1 200px' }) +
+          pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: true, basis: '1 1 200px' }) +
           pf('Alternate Mobile Number', ui.text('altMobile', s.altMobile, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'altMobile', { basis: '1 1 200px' }) +
         '</div>' +
         pf('5. Aadhar number', ui.text('aadhaar', s.aadhaar, { attrs: 'inputmode="numeric" maxlength=12' }), 'aadhaar', { block: true }) +
@@ -260,20 +258,20 @@ SDMIS.formWizard = (function () {
       return '<div id="sec-2">' +
         '<div class="pf-sec">(b) Qualification and occupation information</div>' +
         '<div class="pf-row">' +
-          pf('1. Education', ui.select('education', C.education, s.education), 'education', { req: true, basis: '1 1 160px' }) +
+          pf('1. Education', ui.select('education', C.education, s.education), 'education', { basis: '1 1 160px' }) +
           pf('Institute / School', ui.text('institute', s.institute), 'institute', { basis: '2 1 200px' }) +
-          pf('Any other', ui.text('educationOther', s.educationOther), 'educationOther', { req: true, basis: '1 1 150px', id: 'education-other-wrap' }) +
+          pf('Any other', ui.text('educationOther', s.educationOther), 'educationOther', { basis: '1 1 150px', id: 'education-other-wrap' }) +
         '</div>' +
         '<div class="pf-row">' +
-          pf('2. Occupation', ui.select('occupation', C.occupation, s.occupation), 'occupation', { req: true, basis: '1 1 170px' }) +
-          pf('Post held', ui.text('postName', s.postName), 'postName', { req: true, basis: '1 1 150px', id: 'occ-post-wrap' }) +
-          pf('Nature of appointment', ui.select('employmentType', C.employmentType, s.employmentType), 'employmentType', { req: true, basis: '1 1 170px', id: 'occ-emptype-wrap' }) +
-          pf('Any other', ui.text('employmentRemark', s.employmentRemark), 'employmentRemark', { req: true, basis: '1 1 150px', id: 'occ-emprem-wrap' }) +
-          pf('Place of Employment', ui.text('placeOfEmployment', s.placeOfEmployment), 'placeOfEmployment', { req: true, basis: '1 1 180px', id: 'occ-place-wrap' }) +
-          pf('Business name', ui.text('businessName', s.businessName), 'businessName', { req: true, basis: '1 1 150px', id: 'occ-biz-wrap' }) +
+          pf('2. Occupation', ui.select('occupation', C.occupation, s.occupation), 'occupation', { basis: '1 1 170px' }) +
+          pf('Post held', ui.text('postName', s.postName), 'postName', { basis: '1 1 150px', id: 'occ-post-wrap' }) +
+          pf('Nature of appointment', ui.select('employmentType', C.employmentType, s.employmentType), 'employmentType', { basis: '1 1 170px', id: 'occ-emptype-wrap' }) +
+          pf('Any other', ui.text('employmentRemark', s.employmentRemark), 'employmentRemark', { basis: '1 1 150px', id: 'occ-emprem-wrap' }) +
+          pf('Place of Employment', ui.text('placeOfEmployment', s.placeOfEmployment), 'placeOfEmployment', { basis: '1 1 180px', id: 'occ-place-wrap' }) +
+          pf('Business name', ui.text('businessName', s.businessName), 'businessName', { basis: '1 1 150px', id: 'occ-biz-wrap' }) +
         '</div>' +
         '<div class="pf-row">' +
-          pf('3. Cumulative annual income', ui.select('annualIncome', C.annualIncome, s.annualIncome), 'annualIncome', { req: true, basis: '0 1 240px' }) +
+          pf('3. Cumulative annual income', ui.select('annualIncome', C.annualIncome, s.annualIncome), 'annualIncome', { basis: '0 1 240px' }) +
         '</div>' +
       '</div>';
     }
@@ -284,8 +282,8 @@ SDMIS.formWizard = (function () {
       return '<div id="sec-3">' +
         '<div class="pf-sec">(c) Family information</div>' +
         '<div class="pf-row">' +
-          pf('1. House type', ui.select('houseType', C.houseType, s.houseType), 'houseType', { req: true, basis: '2 1 200px' }) +
-          pf('No. of Family Members', ui.text('familyCount', s.familyCount, { type: 'number', attrs: 'min=1' }), 'familyCount', { req: true, basis: '1 1 150px' }) +
+          pf('1. House type', ui.select('houseType', C.houseType, s.houseType), 'houseType', { basis: '2 1 200px' }) +
+          pf('No. of Family Members', ui.text('familyCount', s.familyCount, { type: 'number', attrs: 'min=1' }), 'familyCount', { basis: '1 1 150px' }) +
         '</div>' +
         '<div class="pf-block">' +
           '<label class="pf-l">2. Facilities at home</label>' +
@@ -307,12 +305,12 @@ SDMIS.formWizard = (function () {
         '<div class="pf-sec">(d) Disability Information</div>' +
         '<div class="pf-row">' +
           pf('1. Disability type', ui.select('disabilityType', store.master('disabilityType'), s.disabilityType), 'disabilityType', { req: true, basis: '2 1 200px' }) +
-          pf('%', ui.text('disabilityPercent', s.disabilityPercent, { type: 'number', attrs: 'min=0 max=100' }), 'disabilityPercent', { req: true, basis: '0 1 80px' }) +
-          pf('Certificate number', ui.text('certNo', s.certNo), 'certNo', { req: true, basis: '2 1 180px' }) +
-          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { req: true, basis: '1 1 150px', id: 'dis-other-wrap' }) +
+          pf('%', ui.text('disabilityPercent', s.disabilityPercent, { type: 'number', attrs: 'min=0 max=100' }), 'disabilityPercent', { basis: '0 1 80px' }) +
+          pf('Certificate Type', ui.select('certType', C.certificateTypes, s.certType), 'certType', { req: true, basis: '2 1 180px' }) +
+          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { basis: '1 1 150px', id: 'dis-other-wrap' }) +
         '</div>' +
-        '<div class="pf-block" data-field="udid">' +
-          '<label class="pf-l">2. UDID number <span class="text-slate-400 font-normal">(18 digits)</span></label>' +
+        '<div class="pf-block" data-field="udid" id="udid-wrap">' +
+          '<label class="pf-l">2. UDID number <span class="text-slate-400 font-normal">(18 digits — required for Permanent certificate)</span></label>' +
           '<div class="mt-1">' + digitBoxes('udid', s.udid, 18) + '</div>' +
           '<p class="field-error hidden text-xs text-rose-600"></p>' +
         '</div>' +
@@ -337,7 +335,7 @@ SDMIS.formWizard = (function () {
         '<div class="bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded px-3 py-2 mb-3 no-print">Form B captures suspected cases — certificate, UDID and disability percentage are recorded only after certification (during Form B → Form A conversion).</div>' +
         '<div class="pf-row">' +
           pf('1. Suspected disability type', ui.select('suspectedDisabilityType', store.master('disabilityType'), s.suspectedDisabilityType), 'suspectedDisabilityType', { req: true, basis: '2 1 220px' }) +
-          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { req: true, basis: '1 1 150px', id: 'dis-other-wrap' }) +
+          pf('Specify other', ui.text('disabilityOther', s.disabilityOther), 'disabilityOther', { basis: '1 1 150px', id: 'dis-other-wrap' }) +
         '</div>' +
         aidsBlock(s) +
         commonDisability(s) +
@@ -350,7 +348,7 @@ SDMIS.formWizard = (function () {
           '<div class="mt-1">' + ui.checkGroup('aids', C.aids, s.aids) + '</div>' +
           '<p class="field-error hidden text-xs text-rose-600"></p>' +
         '</div>' +
-        pf('Specify other aid / appliance', ui.text('aidsOther', s.aidsOther), 'aidsOther', { req: true, block: true, id: 'aids-other-wrap' });
+        pf('Specify other aid / appliance', ui.text('aidsOther', s.aidsOther), 'aidsOther', { block: true, id: 'aids-other-wrap' });
     }
 
     function commonDisability(s) {
@@ -391,12 +389,12 @@ SDMIS.formWizard = (function () {
         '</div>' +
         '<div id="caregiver-detail-wrap">' +
           '<div class="pf-row">' +
-            pf('Caregiver type', ui.select('caregiverType', cgTypes, s.caregiverType), 'caregiverType', { req: true, basis: '1 1 180px' }) +
+            pf('Caregiver type', ui.select('caregiverType', cgTypes, s.caregiverType), 'caregiverType', { basis: '1 1 180px' }) +
             pf('Caregiver name', ui.text('caregiverName', s.caregiverName), 'caregiverName', { basis: '2 1 200px' }) +
           '</div>' +
           '<div class="pf-row">' +
-            pf('Salary / Fee paid', ui.text('caregiverSalary', s.caregiverSalary, { placeholder: 'e.g. ₹6000/month' }), 'caregiverSalary', { req: true, basis: '1 1 180px', id: 'cg-salary-wrap' }) +
-            pf('Relation', ui.text('caregiverRelation', s.caregiverRelation), 'caregiverRelation', { req: true, basis: '1 1 180px', id: 'cg-relation-wrap' }) +
+            pf('Salary / Fee paid', ui.text('caregiverSalary', s.caregiverSalary, { placeholder: 'e.g. ₹6000/month' }), 'caregiverSalary', { basis: '1 1 180px', id: 'cg-salary-wrap' }) +
+            pf('Relation', ui.text('caregiverRelation', s.caregiverRelation), 'caregiverRelation', { basis: '1 1 180px', id: 'cg-relation-wrap' }) +
           '</div>' +
         '</div>';
     }
@@ -526,6 +524,8 @@ SDMIS.formWizard = (function () {
       function refresh() {
         var dt = $('[name=disabilityType], [name=suspectedDisabilityType]').val();
         $('#dis-other-wrap').toggle(dt === 'Others');
+        // UDID (Form A): required & shown only for a Permanent certificate; hidden for Temporary
+        $('#udid-wrap').toggle($('#sec-4 [name=certType]').val() === 'Permanent');
         var aidsChecked = $('[name=aids]:checked').map(function () { return $(this).val(); }).get();
         $('#aids-other-wrap').toggle(aidsChecked.indexOf('Other') > -1);
 
@@ -541,7 +541,7 @@ SDMIS.formWizard = (function () {
         $('#cg-salary-wrap').toggle(cgPresent === 'Yes' && hired);
         $('#cg-relation-wrap').toggle(cgPresent === 'Yes' && cgType === 'Family Member');
       }
-      $('#sec-4').on('change', '[name=disabilityType], [name=suspectedDisabilityType], [name=aids], [name=pensionStatus], [name=caregiverPresent], [name=caregiverType]', refresh);
+      $('#sec-4').on('change', '[name=disabilityType], [name=suspectedDisabilityType], [name=certType], [name=aids], [name=pensionStatus], [name=caregiverPresent], [name=caregiverType]', refresh);
       // UDID: 18 discrete digit boxes — auto-advance, backspace-back, paste-fill
       function syncDigits(name) {
         var v = '';
@@ -620,6 +620,8 @@ SDMIS.formWizard = (function () {
           else if (k === 'certImage') { /* handled by file reader */ }
           else if (typeof d4[k] !== 'undefined') target[k] = d4[k];
         });
+        // UDID only applies to a Permanent certificate — drop any stale value otherwise
+        if (formType === 'A' && target.certType !== 'Permanent') target.udid = '';
       }
     }
 
@@ -648,69 +650,33 @@ SDMIS.formWizard = (function () {
         $('#wiz-body input, #wiz-body select, #wiz-body textarea').removeClass('border-rose-400');
       }
 
-      // Form B mandatory set (req #13): Name, Address, Contact, Type of Disability only.
-      // Steps 2 & 3 are optional for Form B.
-      var isB = formType === 'B';
-
+      // Mandatory set (both Form A & B): Name, Gender, Present Address, Contact Number, Disability Type.
+      // Form A also requires Certificate Type; UDID is required only for a Permanent certificate.
+      // Everything else is optional.
       if (n === 1) {
         var s = rec.step1;
         if (zone && (zone.enumerators || []).length && !rec.enumeratorId) fail('enumeratorId', 'Select the enumerator who collected this survey');
         if (!String(s.name || '').trim()) fail('name');
+        if (!String(s.gender || '').trim()) fail('gender');
         if (!String(s.address || '').trim()) fail('address');
+        if (!String(s.contact || '').trim()) fail('contact');
         if (s.permSameAsCurrent === 'No' && !String(s.permanentAddress || '').trim()) fail('permanentAddress', 'Enter the permanent address');
-        if (isB) {
-          if (!String(s.contact || '').trim()) fail('contact');   // contact mandatory only for Form B
-        } else {
-          if (!String(s.gender || '').trim()) fail('gender');     // gender mandatory for Form A
-        }
-        // soft format checks (only when a value is present — fields themselves are optional now)
+        // soft format check (only when a value is present — the field itself is optional)
         if (s.pin && !/^\d{6}$/.test(s.pin)) fail('pin', 'PIN must be 6 digits');
-      } else if (n === 2) {
-        if (isB) return ok;   // qualification not mandatory for Form B
-        var s2 = rec.step2;
-        if (!s2.education) fail('education');
-        if (s2.education === 'Others' && !s2.educationOther.trim()) fail('educationOther', 'Specify education');
-        if (!s2.occupation) fail('occupation');
-        if (s2.occupation === 'Government Employee') {
-          if (!s2.postName.trim()) fail('postName', 'Required for Govt employee');
-          if (!s2.employmentType) fail('employmentType', 'Required for Govt employee');
-          if (s2.employmentType === 'Others' && !s2.employmentRemark.trim()) fail('employmentRemark', 'Specify employment type');
-        }
-        if (s2.occupation === 'Private' && !s2.placeOfEmployment.trim()) fail('placeOfEmployment', 'Required for private occupation');
-        if (s2.occupation === 'Self Employed' && !s2.businessName.trim()) fail('businessName', 'Required for self employed');
-        if (!s2.annualIncome) fail('annualIncome');
-      } else if (n === 3) {
-        if (isB) return ok;   // family info not mandatory for Form B
-        var s3 = rec.step3;
-        if (!s3.houseType) fail('houseType');
-        if (!String(s3.familyCount).trim() || parseInt(s3.familyCount, 10) < 1) fail('familyCount', 'Enter a valid number');
+      } else if (n === 2 || n === 3) {
+        return ok;   // qualification & family information are no longer mandatory
       } else if (n === 4) {
         if (formType === 'A') {
           var a = rec.step4A;
           if (!a.disabilityType) fail('disabilityType');
-          if (a.disabilityType === 'Others' && !a.disabilityOther.trim()) fail('disabilityOther', 'Specify disability');
-          if (!String(a.disabilityPercent).trim()) fail('disabilityPercent');
-          if (!a.certNo.trim()) fail('certNo');
-          if (a.udid && a.udid.length !== 18) fail('udid', 'UDID must be 18 characters');
-          if (!a.aids.length) fail('aids', 'Select at least one (or include applicable)');
-          if (a.aids.indexOf('Other') > -1 && !a.aidsOther.trim()) fail('aidsOther', 'Specify other aid');
-          validateCaregiver(a);
+          if (!a.certType) fail('certType', 'Select certificate type');
+          if (a.certType === 'Permanent') {
+            if (!String(a.udid || '').trim()) fail('udid', 'UDID is required for a Permanent certificate');
+            else if (a.udid.length !== 18) fail('udid', 'UDID must be 18 digits');
+          }
         } else {
           var b = rec.step4B;
           if (!b.suspectedDisabilityType) fail('suspectedDisabilityType', 'Type of disability is required');
-          if (b.suspectedDisabilityType === 'Others' && !b.disabilityOther.trim()) fail('disabilityOther', 'Specify disability');
-          validateCaregiver(b);
-        }
-      }
-      // caregiver conditional rules (req #16) — only when the user opted into a caregiver
-      function validateCaregiver(s4) {
-        if (s4.caregiverPresent !== 'Yes') return;
-        if (!s4.caregiverType) { fail('caregiverType', 'Select caregiver type'); return; }
-        if ((s4.caregiverType === 'Hired' || s4.caregiverType === 'Professional') && !String(s4.caregiverSalary || '').trim()) {
-          fail('caregiverSalary', 'Enter salary / fee paid');
-        }
-        if (s4.caregiverType === 'Family Member' && !String(s4.caregiverRelation || '').trim()) {
-          fail('caregiverRelation', 'Mention the relation');
         }
       }
       return ok;
@@ -835,7 +801,7 @@ SDMIS.formWizard = (function () {
       var a = rec.step4A;
       html += section('Disability Information (Certified)',
         row('Disability Type', a.disabilityType + (a.disabilityOther ? ' (' + a.disabilityOther + ')' : '')) +
-        row('Disability %', a.disabilityPercent) + row('Certificate No.', a.certNo) + row('UDID', a.udid) +
+        row('Disability %', a.disabilityPercent) + row('Certificate Type', a.certType || a.certNo) + row('UDID', a.udid) +
         row('Issue Date', a.issueDate) + row('Place of Issue', a.issuePlace) +
         row('Aids & Appliances', a.aids) + (a.aidsOther ? row('Other Aid', a.aidsOther) : '') +
         row('Benefits', a.benefits) + pensionRows(a) +
