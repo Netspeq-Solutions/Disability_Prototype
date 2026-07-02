@@ -779,7 +779,7 @@ SDMIS.formWizard = (function () {
         row('Aadhaar', s1.aadhaar) + row('Voter ID', s1.voterId) +
         row('Additional Contact', [s1.altContactName, s1.altContactNo].filter(Boolean).join(' / ')) +
         row('Offsprings', fam) + row('Siblings', sib) +
-        row('Residency', s1.residency === 'local' ? 'Local' : 'Others') +
+        row('Residency', s1.residency === 'local' ? 'Sikkimese (Local)' : 'Non-Sikkimese (Non-Local)') +
         (s1.residency === 'local'
           ? row('COI / RC / SSE', [s1.coiDocType, s1.coiDocNo].filter(Boolean).join(': ') || [s1.coiNo, s1.rcNo, s1.sikkimSubjectNo].filter(Boolean).join(' · '))
           : row('ID Proof', s1.idProofNo)) +
