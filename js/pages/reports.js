@@ -182,7 +182,8 @@ SDMIS.router.register('reports', {
         var s4 = step4Of(r) || {};
         var row = [
           r.step1.name, r.formType, surveyPeriod(r.surveyId), zoneName(r.zoneId), r.gpu, r.step1.block, r.ward, r.step1.age, r.step1.gender,
-          disabilityOf(r), r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType, r.step1.residency,
+          disabilityOf(r), r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType,
+          (r.step1.residency === 'local' ? 'Local' : (r.step1.residency ? 'Others' : '')),
           pensionOf(r), schemesOf(r).join('; '), servicesOf(r).join('; '), caregiverOf(r), caregiverTypeOf(r), s4.caregiverSalary,
           C.statuses[r.status], en.name
         ].map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; });
@@ -242,7 +243,7 @@ SDMIS.router.register('reports', {
             fSelect('annualIncome', 'Annual Income', C.annualIncome) +
             fSelect('houseType', 'House Type', C.houseType) +
             fSelect('maritalStatus', 'Marital Status', C.maritalStatus) +
-            fSelect('residency', 'Local / Non-Local', C.residency) +
+            fSelect('residency', 'Residency (Local / Others)', C.residency) +
             fSelect('pensionStatus', 'Pension Status', C.pensionStatus) +
             fSelect('pensionScheme', 'Pension Scheme', store.master('pensionSchemes')) +
             fSelect('caregiver', 'Has Caregiver', C.pensionStatus) +
