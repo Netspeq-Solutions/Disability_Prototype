@@ -7,7 +7,7 @@ SDMIS.router.register('hq', {
   render: function ($c) {
     var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
     var recs = store.all('beneficiaries');
-    var zones = store.all('zones');
+    var districts = store.master('districts');
 
     var byStatus = { draft: 0, submitted: 0, returned: 0, approved: 0 };
     var byForm = { A: 0, B: 0 };
@@ -41,16 +41,16 @@ SDMIS.router.register('hq', {
       }).join('');
     }
 
-    // zone progress (records entered per zone, % submitted+approved)
-    var zoneProgress = zones.map(function (z) {
-      var zr = recs.filter(function (r) { return r.zoneId === z.id; });
-      var done = zr.filter(function (r) { return r.status === 'approved'; }).length;
-      return { zone: z, total: zr.length, done: done };
+    // district progress (records entered per district, % approved)
+    var districtProgress = districts.map(function (d) {
+      var dr = recs.filter(function (r) { return r.step1 && r.step1.district === d; });
+      var done = dr.filter(function (r) { return r.status === 'approved'; }).length;
+      return { name: d, total: dr.length, done: done };
     }).filter(function (x) { return x.total > 0; }).sort(function (a, b) { return b.total - a.total; });
 
-    var zoneRows = zoneProgress.map(function (p) {
+    var districtRows = districtProgress.map(function (p) {
       var pct = p.total ? Math.round(p.done / p.total * 100) : 0;
-      return '<tr class="border-b"><td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(p.zone.name) + '</td>' +
+      return '<tr class="border-b"><td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(p.name) + '</td>' +
         '<td class="px-3 py-2 text-sm text-slate-500">' + p.total + '</td>' +
         '<td class="px-3 py-2 text-sm text-emerald-600">' + p.done + '</td>' +
         '<td class="px-3 py-2 w-40"><div class="h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width:' + pct + '%"></div></div></td>' +
@@ -65,7 +65,7 @@ SDMIS.router.register('hq', {
         bigStat('Total Beneficiaries', recs.length, 'text-indigo-600', byForm.A + ' certified · ' + byForm.B + ' suspected') +
         bigStat('Approved', byStatus.approved, 'text-emerald-600', 'Verified by SWO') +
         bigStat('Pending Verification', byStatus.submitted, 'text-amber-600', 'Awaiting SWO') +
-        bigStat('Active Zones', zoneProgress.length + ' / ' + zones.length, 'text-slate-700', 'with data entered') +
+        bigStat('Active Districts', districtProgress.length + ' / ' + districts.length, 'text-slate-700', 'with data entered') +
       '</div>' +
 
       '<div class="grid md:grid-cols-2 gap-5 mb-5">' +
@@ -80,11 +80,11 @@ SDMIS.router.register('hq', {
       '</div>' +
 
       '<div class="bg-white border rounded-xl shadow-sm">' +
-        '<div class="px-4 py-3 border-b flex items-center justify-between"><h3 class="font-semibold text-slate-700 text-sm">Zone-wise Data Entry Progress</h3>' +
+        '<div class="px-4 py-3 border-b flex items-center justify-between"><h3 class="font-semibold text-slate-700 text-sm">District-wise Data Entry Progress</h3>' +
           '<a href="#/reports" class="text-xs text-indigo-600 hover:underline">Open full reports →</a></div>' +
         '<div class="overflow-x-auto max-h-96 overflow-y-auto"><table class="w-full"><thead class="sticky top-0 bg-white"><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
-          '<th class="px-3 py-2">Zone</th><th class="px-3 py-2">Records</th><th class="px-3 py-2">Approved</th><th class="px-3 py-2">Progress</th><th class="px-3 py-2"></th>' +
-        '</tr></thead><tbody>' + (zoneRows || '<tr><td colspan="5">' + ui.emptyState('No data entered yet') + '</td></tr>') + '</tbody></table></div>' +
+          '<th class="px-3 py-2">District</th><th class="px-3 py-2">Records</th><th class="px-3 py-2">Approved</th><th class="px-3 py-2">Progress</th><th class="px-3 py-2"></th>' +
+        '</tr></thead><tbody>' + (districtRows || '<tr><td colspan="5">' + ui.emptyState('No data entered yet') + '</td></tr>') + '</tbody></table></div>' +
       '</div>'
     );
   }

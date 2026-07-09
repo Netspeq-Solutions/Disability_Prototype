@@ -8,7 +8,8 @@ SDMIS.router.register('inspector', {
     var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
     var auth = SDMIS.auth;
     var user = auth.current();
-    var zone = auth.currentZone();
+    var blocks = auth.currentBlocks();   // block names this inspector is mapped to
+    var blockObjs = store.masterItems('blocks').filter(function (b) { return blocks.indexOf(b.name) > -1; });
     var PER = 8;
 
     // ---- survey selection (persisted per user) ----
@@ -26,7 +27,7 @@ SDMIS.router.register('inspector', {
     if (params[0] === 'new' && (params[1] === 'A' || params[1] === 'B')) {
       var srv = currentSurvey();
       if (!srv || srv.status !== 'active') { ui.toast('Select an active survey before adding records', 'error'); return list(); }
-      var blank = SDMIS.formWizard.blankRecord(params[1], zone ? zone.id : null, user.id, srv.id);
+      var blank = SDMIS.formWizard.blankRecord(params[1], user.id, srv.id);
       blank.enumeratorId = defaultEnumeratorId();
       return openWizard(blank);
     }
@@ -42,7 +43,7 @@ SDMIS.router.register('inspector', {
 
     function openWizard(rec) {
       SDMIS.formWizard.open($c, {
-        record: rec, zone: zone,
+        record: rec, blocks: blockObjs, enumerators: user.enumerators || [],
         afterSave: function () { SDMIS.router.go('#/inspector'); },
         onCancel: function () { SDMIS.router.go('#/inspector'); }
       });
@@ -51,20 +52,20 @@ SDMIS.router.register('inspector', {
     function myRecords() {
       var sid = currentSurveyId();
       return store.where('beneficiaries', function (b) {
-        return zone && b.zoneId === zone.id && b.surveyId === sid;
+        return b.createdBy === user.id && b.surveyId === sid;
       }).sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
     }
 
     // Default enumerator for a NEW form: the only one if there's a single enumerator,
-    // otherwise the one this inspector used most recently in this zone.
+    // otherwise the one this inspector used most recently.
     function defaultEnumeratorId() {
-      var ens = (zone && zone.enumerators) || [];
+      var ens = (user.enumerators) || [];
       if (!ens.length) return null;
       if (ens.length === 1) return ens[0].id;
       var valid = {};
       ens.forEach(function (e) { valid[e.id] = true; });
       var prior = store.where('beneficiaries', function (b) {
-        return zone && b.zoneId === zone.id && b.createdBy === user.id && b.enumeratorId && valid[b.enumeratorId];
+        return b.createdBy === user.id && b.enumeratorId && valid[b.enumeratorId];
       }).sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
       return prior.length ? prior[0].enumeratorId : null;
     }
@@ -123,12 +124,10 @@ SDMIS.router.register('inspector', {
               ui.select('survey-sel', surveyOpts, srv ? srv.id : '', { placeholder: 'No survey' }).replace(ui.inputCls, ui.inputCls + ' min-w-[200px]') +
             '</div>' +
             '<div class="bg-white border rounded-xl px-4 py-2.5 text-sm flex items-center gap-3">' +
-              '<span><span class="text-slate-400">Zone:</span>&nbsp;<span class="font-semibold text-slate-700">' + (zone ? ui.esc(zone.name) + ' (' + ui.esc(zone.code) + ')' : 'None') + '</span></span>' +
-              (zone
-                ? '<button id="enum-manage" class="text-indigo-600 text-xs hover:underline whitespace-nowrap border-l pl-3">' +
-                    '⚇ Enumerators (' + ((zone.enumerators || []).length) + ')'
-                  + '</button>'
-                : '') +
+              '<span><span class="text-slate-400">Blocks:</span>&nbsp;<span class="font-semibold text-slate-700">' + (blocks.length ? ui.esc(blocks.join(', ')) : 'None') + '</span></span>' +
+              '<button id="enum-manage" class="text-indigo-600 text-xs hover:underline whitespace-nowrap border-l pl-3">' +
+                '⚇ Enumerators (' + ((user.enumerators || []).length) + ')' +
+              '</button>' +
             '</div>' +
           '</div>' +
           '<div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">' + newBtns + '</div>' +
@@ -150,7 +149,7 @@ SDMIS.router.register('inspector', {
             '<div class="flex flex-wrap gap-2 text-sm">' + filterChip('all', 'All') + filterChip('draft', 'Drafts') + filterChip('returned', 'Returned') + filterChip('submitted', 'Submitted') + filterChip('approved', 'Approved') + '</div>' +
           '</div>' +
           '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
-            '<th class="px-3 py-2">Beneficiary</th><th class="px-3 py-2">Form</th><th class="px-3 py-2">GPU</th><th class="px-3 py-2">Ward</th><th class="px-3 py-2">Age/Gender</th><th class="px-3 py-2">Status</th><th></th>' +
+            '<th class="px-3 py-2">Beneficiary</th><th class="px-3 py-2">Form</th><th class="px-3 py-2">Block</th><th class="px-3 py-2">Ward</th><th class="px-3 py-2">Age/Gender</th><th class="px-3 py-2">Status</th><th></th>' +
           '</tr></thead><tbody id="rec-rows"></tbody></table></div>' +
           '<div id="rec-pager"></div>' +
         '</div>'
@@ -179,7 +178,7 @@ SDMIS.router.register('inspector', {
             '<td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(r.step1.name || '(no name)') +
               (r.status === 'returned' ? ' <span class="text-rose-500 text-xs">↩ returned</span>' : '') + '</td>' +
             '<td class="px-3 py-2">' + (r.formType === 'A' ? ui.badge('A', 'bg-emerald-100 text-emerald-700') : ui.badge('B', 'bg-amber-100 text-amber-700')) + '</td>' +
-            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc(r.gpu || '—') + '</td>' +
+            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc((r.step1 && r.step1.block) || '—') + '</td>' +
             '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc(r.ward || '—') + '</td>' +
             '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc((r.step1.age || '—') + ' / ' + (r.step1.gender || '—')) + '</td>' +
             '<td class="px-3 py-2">' + ui.statusBadge(r.status) + '</td>' +
@@ -203,10 +202,9 @@ SDMIS.router.register('inspector', {
       draw();
     }
 
-    // Manage the list of enumerators (Anganwadi workers) for this inspector's zone
+    // Manage this inspector's own flat list of enumerators (Anganwadi workers)
     function enumeratorsModal() {
-      if (!zone) { ui.toast('No zone assigned to your account', 'error'); return; }
-      var ens = zone.enumerators || [];
+      var ens = user.enumerators || [];
       var rows = ens.length
         ? ens.map(function (en) {
             return '<div class="flex items-center justify-between border rounded-lg px-3 py-2 mb-2">' +
@@ -217,9 +215,9 @@ SDMIS.router.register('inspector', {
                 '<button class="en-del text-rose-500 text-sm hover:underline" data-id="' + en.id + '">Delete</button>' +
               '</div></div>';
           }).join('')
-        : '<p class="text-sm text-slate-400 mb-2">No enumerators yet. Add the Anganwadi workers who collect surveys in this zone.</p>';
+        : '<p class="text-sm text-slate-400 mb-2">No enumerators yet. Add the Anganwadi workers who collect your surveys.</p>';
       var body =
-        '<p class="text-sm text-slate-500 mb-3">Anganwadi workers who collect surveys in <b>' + ui.esc(zone.name) + '</b>. Each record selects one of these as its enumerator &mdash; recorded here, not re-typed per form.</p>' +
+        '<p class="text-sm text-slate-500 mb-3">Anganwadi workers who collect surveys for you. Each record selects one of these as its enumerator &mdash; recorded here, not re-typed per form.</p>' +
         rows +
         '<div class="mt-3 flex justify-between">' +
           '<button id="en-add" class="bg-indigo-600 text-white text-sm px-3.5 py-1.5 rounded-md hover:bg-indigo-700">+ Add Enumerator</button>' +
@@ -232,9 +230,9 @@ SDMIS.router.register('inspector', {
         var id = $(this).data('id');
         var used = store.where('beneficiaries', function (b) { return b.enumeratorId === id; }).length;
         if (used) { ui.toast('Cannot delete: ' + used + ' record(s) use this enumerator', 'error'); return; }
-        var arr = (zone.enumerators || []).filter(function (e) { return e.id !== id; });
-        store.update('zones', zone.id, { enumerators: arr });
-        zone.enumerators = arr;
+        var arr = (user.enumerators || []).filter(function (e) { return e.id !== id; });
+        store.update('officials', user.id, { enumerators: arr });
+        user.enumerators = arr;
         ui.toast('Enumerator removed', 'success');
         enumeratorsModal();
       });
@@ -242,7 +240,7 @@ SDMIS.router.register('inspector', {
     }
 
     function enumeratorFormModal(id) {
-      var en = id ? ((zone.enumerators || []).filter(function (e) { return e.id === id; })[0] || {}) : {};
+      var en = id ? ((user.enumerators || []).filter(function (e) { return e.id === id; })[0] || {}) : {};
       var body =
         ui.field('Name', ui.text('en_name', en.name), { required: true, name: 'en_name' }) +
         '<div class="grid md:grid-cols-2 gap-x-4">' +
@@ -260,15 +258,15 @@ SDMIS.router.register('inspector', {
             name: d.en_name.trim(), awc: (d.en_awc || '').trim(), project: (d.en_project || '').trim(),
             district: (d.en_district || '').trim(), contact: (d.en_contact || '').trim()
           };
-          var arr = (zone.enumerators || []).slice();
+          var arr = (user.enumerators || []).slice();
           if (id) {
             arr = arr.map(function (e) { return e.id === id ? Object.assign({}, e, fields) : e; });
           } else {
             fields.id = store.uid('enum');
             arr.push(fields);
           }
-          store.update('zones', zone.id, { enumerators: arr });
-          zone.enumerators = arr;
+          store.update('officials', user.id, { enumerators: arr });
+          user.enumerators = arr;
           ui.toast('Enumerator saved', 'success');
           enumeratorsModal();   // reopen the manage list (replaces this modal)
           return false;          // keep the reopened list open

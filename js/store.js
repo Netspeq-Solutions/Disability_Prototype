@@ -137,13 +137,23 @@ SDMIS.store = (function () {
       raw = Array.isArray(C[key]) ? C[key] : [];
     }
     return raw.map(function (it, i) {
-      if (it && typeof it === 'object') return { id: it.id || slugId(key, it.name, i), name: it.name };
+      // preserve any extra fields (e.g. a Block's parent District) alongside id/name
+      if (it && typeof it === 'object') return Object.assign({}, it, { id: it.id || slugId(key, it.name, i), name: it.name });
       return { id: slugId(key, it, i), name: it };
     });
   }
   // Just the names — used to populate form dropdowns / comparisons.
   function master(key) {
     return masterItems(key).map(function (it) { return it.name; });
+  }
+  // Blocks belonging to a given District (by name). Blocks without a parent are treated as unassigned.
+  function blocksInDistrict(district) {
+    return masterItems('blocks').filter(function (b) { return !district || b.district === district; });
+  }
+  // The District a Block (by name) rolls up to, or '' if unknown.
+  function districtOfBlock(blockName) {
+    var b = masterItems('blocks').filter(function (x) { return x.name === blockName; })[0];
+    return b ? (b.district || '') : '';
   }
   // Options for ui.select / ui.multiSelect (value = name, label = name).
   function masterOptions(key) {
@@ -160,7 +170,7 @@ SDMIS.store = (function () {
   function seedDb(data) {
     var db = read();
     db.surveys = data.surveys || [];
-    db.zones = data.zones;
+    db.zones = data.zones || [];
     db.officials = data.officials;
     db.beneficiaries = data.beneficiaries;
     db.masters = data.masters || {};
@@ -196,6 +206,8 @@ SDMIS.store = (function () {
     masterItems: masterItems,
     masterOptions: masterOptions,
     setMasterItems: setMasterItems,
+    blocksInDistrict: blocksInDistrict,
+    districtOfBlock: districtOfBlock,
     audit: audit,
     seedDb: seedDb,
     isSeeded: isSeeded,
