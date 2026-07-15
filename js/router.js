@@ -11,7 +11,6 @@ SDMIS.router = (function () {
   var NAV = {
     admin: [
       { route: 'admin', icon: '🗓️', label: 'Surveys' },
-      { route: 'admin/zones', icon: '🗺️', label: 'Zones' },
       { route: 'admin/officials', icon: '👥', label: 'Officials' },
       { route: 'admin/masters', icon: '🗂️', label: 'Masters' }
     ],
@@ -44,7 +43,6 @@ SDMIS.router = (function () {
 
   function shell(user, parsed, contentRenderer) {
     var C = SDMIS.constants;
-    var zone = auth.currentZone();
     var activeRoute = parsed.name;
     // full path incl. first param, e.g. 'admin/masters' — lets nested nav items highlight correctly
     var activePath = parsed.name + (parsed.params && parsed.params.length ? '/' + parsed.params[0] : '');
@@ -63,7 +61,14 @@ SDMIS.router = (function () {
         '<span>' + n.icon + '</span>' + n.label + '</a>';
     }).join('');
 
-    var subtitle = zone ? (zone.name + ' Zone · ' + zone.code) : C.roles[user.role];
+    // subtitle: inspector → mapped blocks, SWO → district, else role
+    var subtitle = C.roles[user.role];
+    if (user.role === 'inspector') {
+      var blocks = (user.blocks || []);
+      subtitle = blocks.length ? ('Blocks: ' + blocks.join(', ')) : 'No blocks assigned';
+    } else if (user.role === 'swo') {
+      subtitle = user.district ? (user.district + ' District') : 'No district assigned';
+    }
 
     var html =
       '<div class="flex h-screen overflow-hidden">' +

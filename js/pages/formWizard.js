@@ -4,16 +4,17 @@ window.SDMIS = window.SDMIS || {};
 SDMIS.formWizard = (function () {
   var ui = SDMIS.ui, C = SDMIS.constants, store = SDMIS.store;
 
-  function blankRecord(formType, zoneId, createdBy, surveyId) {
+  function blankRecord(formType, createdBy, surveyId) {
     return {
-      formType: formType, surveyId: surveyId || null, zoneId: zoneId, gpu: '', ward: '',
+      formType: formType, surveyId: surveyId || null, gpu: '', ward: '',
       status: 'draft', createdBy: createdBy, reviewedBy: null, returnRemark: '',
       createdAt: new Date().toISOString(), convertedFrom: null, enumeratorId: null,
       formImages: [],
       step1: {
         surveyDate: new Date().toISOString().slice(0, 10),
         name: '', parentName: '', fatherName: '', motherName: '', dob: '', age: '', gender: '',
-        address: '', permSameAsCurrent: 'Yes', permanentAddress: '', gpu: '', block: '', ward: '',
+        permanentAddress: '', district: '', block: '', gpu: '', ward: '',
+        permSameAsCurrent: 'Yes', address: '', presentDistrict: '', presentBlock: '', presentGpu: '', presentWard: '',
         houseNo: '', pin: '', contact: '', altMobile: '', altContactName: '', altContactNo: '',
         aadhaar: '', voterId: '', offsprings: [], siblings: [],
         residency: 'local', coiDocType: '', coiDocNo: '', idProofNo: '',
@@ -21,16 +22,17 @@ SDMIS.formWizard = (function () {
       },
       step2: { education: '', educationOther: '', institute: '', occupation: '', postName: '', employmentType: '', employmentRemark: '', placeOfEmployment: '', businessName: '', annualIncome: '' },
       step3: { houseType: '', familyCount: '', facilities: [], accessibilityDetail: '', language: '' },
-      step4A: formType === 'A' ? { disabilityType: '', disabilityOther: '', disabilityPercent: '', certType: '', certImage: '', udid: '', issueDate: '', issuePlace: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null,
-      step4B: formType === 'B' ? { suspectedDisabilityType: '', disabilityOther: '', aids: [], aidsOther: '', benefits: '', pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null
+      step4A: formType === 'A' ? { disabilityType: '', disabilityOther: '', disabilityPercent: '', certType: '', validTill: '', certImage: '', udid: '', issueDate: '', issuePlace: '', aids: [], aidsOther: '', benefits: [], pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null,
+      step4B: formType === 'B' ? { suspectedDisabilityType: '', disabilityOther: '', aids: [], aidsOther: '', benefits: [], pensionStatus: '', pensionSchemes: [], pensionSince: '', medicalProblems: '', medicalSince: '', services: [], caregiverPresent: '', caregiverType: '', caregiverName: '', caregiverSalary: '', caregiverRelation: '' } : null
     };
   }
 
   // ============ EDITABLE SHEET ============
   function open($container, opts) {
-    // opts: { record, zone, afterSave (fn), onCancel (fn) }
+    // opts: { record, blocks (allowed block objects {name,district}), enumerators, afterSave, onCancel }
     var rec = JSON.parse(JSON.stringify(opts.record));
-    var zone = opts.zone;
+    var allowedBlocks = (opts.blocks && opts.blocks.length) ? opts.blocks : null; // null = any block from masters
+    var enumList = opts.enumerators || [];
     var survey = rec.surveyId ? store.find('surveys', rec.surveyId) : null;
     var formType = rec.formType;
 
@@ -75,19 +77,19 @@ SDMIS.formWizard = (function () {
         ? '<div class="bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-lg px-4 py-2 mb-4 no-print">↩ Returned by SWO: ' + ui.esc(rec.returnRemark || 'Please review and correct.') + '</div>'
         : '';
 
-      var surveyBanner = (survey || zone)
+      var blockHint = allowedBlocks ? allowedBlocks.map(function (b) { return b.name; }).join(', ') : '';
+      var surveyBanner = (survey || blockHint)
         ? '<div class="bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm rounded-lg px-4 py-2 mb-4 no-print">' +
             (survey ? 'Survey: <b>' + ui.esc(survey.name) + '</b> (' + ui.esc(survey.period) + ')' : '') +
-            (survey && zone ? ' &nbsp;·&nbsp; ' : '') +
-            (zone ? 'Zone: <b>' + ui.esc(zone.name) + '</b>' : '') +
+            (survey && blockHint ? ' &nbsp;·&nbsp; ' : '') +
+            (blockHint ? 'Block(s): <b>' + ui.esc(blockHint) + '</b>' : '') +
           '</div>'
         : '';
 
       // Enumerator selector lives OUTSIDE the paper form (it's survey metadata, not part of the sheet)
-      var enumList = (zone && zone.enumerators) ? zone.enumerators : [];
       var enumInner = enumList.length
         ? ui.select('enumeratorId', enumList.map(function (en) { return { value: en.id, label: en.name + (en.awc ? ' — ' + en.awc : '') }; }), rec.enumeratorId || '', { placeholder: 'Select enumerator' })
-        : '<span class="text-amber-600 text-xs">No enumerators set for this zone yet — add them via the “Enumerators” button before submitting.</span>';
+        : '<span class="text-amber-600 text-xs">No enumerators configured yet — add them via the “Enumerators” button before submitting.</span>';
       var enumCard = '<div id="sec-enum" class="bg-white border rounded-xl shadow-sm p-4 mb-4 no-print">' +
         ui.field('Surveyed by (Enumerator)', enumInner, { required: enumList.length > 0, name: 'enumeratorId', cls: 'mb-0' }) +
         '</div>';
@@ -153,12 +155,57 @@ SDMIS.formWizard = (function () {
     }
 
     // ---------- (a) Personal information ----------
+    // Address dropdown options from the admin-managed masters. If a record already holds a
+    // value that is no longer in the master (e.g. legacy free-text data), keep it as an option
+    // so an edit never silently drops it.
+    function addrOpts(key, val) {
+      var opts = store.master(key);
+      if (val && opts.indexOf(val) === -1) opts = opts.concat([val]);
+      return opts;
+    }
+    // District options — limited to the districts of the allowed blocks (inspector's mapping),
+    // else every district. Blocks belong to a district, so District drives the Block list.
+    function districtOpts() {
+      var opts;
+      if (allowedBlocks) {
+        var set = {}; allowedBlocks.forEach(function (b) { if (b.district) set[b.district] = true; });
+        opts = Object.keys(set);
+      } else {
+        opts = store.master('districts');
+      }
+      var cur = rec.step1.district;
+      if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
+      return opts;
+    }
+    // Block options for a given district — restricted to the allowed blocks when set.
+    function blockOpts(district) {
+      var base = allowedBlocks || store.masterItems('blocks');
+      var opts = base.filter(function (b) { return !district || b.district === district; }).map(function (b) { return b.name; });
+      var cur = rec.step1.block;
+      if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
+      return opts;
+    }
+    // Present (temporary) address is NOT limited to the inspector's mapped blocks —
+    // a beneficiary may currently reside anywhere — so it draws from the full masters.
+    function presentDistrictOpts() {
+      var opts = store.master('districts');
+      var cur = rec.step1.presentDistrict;
+      if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
+      return opts;
+    }
+    function presentBlockOpts(district) {
+      var opts = store.masterItems('blocks')
+        .filter(function (b) { return !district || b.district === district; })
+        .map(function (b) { return b.name; });
+      var cur = rec.step1.presentBlock;
+      if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
+      return opts;
+    }
+
     function sectionPersonal() {
       var s = rec.step1;
-      var gpuOpts = zone ? zone.gpus : [];
-      var wardOpts = zone ? zone.wards : [];
 
-      // Mandatory for BOTH Form A & B: Name, Gender, Present Address, Contact Number (+ Disability Type in step 4)
+      // Mandatory for BOTH Form A & B: Name, Gender, Permanent Address, Contact Number (+ Disability Type in step 4)
       return '<div id="sec-1">' +
         // header: survey date (left) + passport photo box (right)
         '<div class="pf-head">' +
@@ -186,11 +233,14 @@ SDMIS.formWizard = (function () {
           pf("2. Father's Name", ui.text('fatherName', s.fatherName), 'fatherName', { basis: '1 1 220px' }) +
           pf("Mother's Name", ui.text('motherName', s.motherName), 'motherName', { basis: '1 1 220px' }) +
         '</div>' +
-        pf('3. Present Address', ui.text('address', s.address), 'address', { req: true, block: true }) +
+        pf('3. Permanent Address', ui.text('permanentAddress', s.permanentAddress), 'permanentAddress', { req: true, block: true }) +
         '<div class="pf-row">' +
-          pf('GPU', gpuOpts.length ? ui.select('gpu', gpuOpts, s.gpu) : ui.text('gpu', s.gpu), 'gpu', { basis: '1 1 150px' }) +
-          pf('Block', ui.text('block', s.block), 'block', { basis: '1 1 150px' }) +
-          pf('Ward', wardOpts.length ? ui.select('ward', wardOpts, s.ward) : ui.text('ward', s.ward), 'ward', { basis: '1 1 110px' }) +
+          pf('District', ui.select('district', districtOpts(), s.district), 'district', { req: true, basis: '1 1 150px' }) +
+          pf('Block', ui.select('block', blockOpts(s.district), s.block), 'block', { req: true, basis: '1 1 150px', id: 'block-wrap' }) +
+          pf('GPU', ui.select('gpu', addrOpts('gpus', s.gpu), s.gpu), 'gpu', { basis: '1 1 150px' }) +
+          pf('Ward', ui.select('ward', addrOpts('wards', s.ward), s.ward), 'ward', { basis: '1 1 110px' }) +
+        '</div>' +
+        '<div class="pf-row">' +
           pf('House No.', ui.text('houseNo', s.houseNo), 'houseNo', { basis: '1 1 110px' }) +
           pf('Pin number', ui.text('pin', s.pin, { attrs: 'maxlength=6' }), 'pin', { basis: '1 1 110px' }) +
         '</div>' +
@@ -198,7 +248,17 @@ SDMIS.formWizard = (function () {
           '<label class="pf-l">Is permanent address same as present address?</label>' +
           '<div class="mt-1">' + ui.radioGroup('permSameAsCurrent', C.pensionStatus, s.permSameAsCurrent || 'Yes') + '</div>' +
         '</div>' +
-        pf('Permanent Address', ui.text('permanentAddress', s.permanentAddress), 'permanentAddress', { req: true, block: true, id: 'perm-addr-wrap' }) +
+        // Present address — shown only when it differs; mirrors the permanent-address fields
+        '<div id="present-addr-wrap" class="pf-subsection">' +
+          '<div class="pf-sec pf-sec-sub">Present (Current) Address</div>' +
+          pf('Present Address', ui.text('address', s.address), 'address', { req: true, block: true }) +
+          '<div class="pf-row">' +
+            pf('District', ui.select('presentDistrict', presentDistrictOpts(), s.presentDistrict), 'presentDistrict', { req: true, basis: '1 1 150px' }) +
+            pf('Block', ui.select('presentBlock', presentBlockOpts(s.presentDistrict), s.presentBlock), 'presentBlock', { req: true, basis: '1 1 150px', id: 'present-block-wrap' }) +
+            pf('GPU', ui.select('presentGpu', addrOpts('gpus', s.presentGpu), s.presentGpu), 'presentGpu', { basis: '1 1 150px' }) +
+            pf('Ward', ui.select('presentWard', addrOpts('wards', s.presentWard), s.presentWard), 'presentWard', { basis: '1 1 110px' }) +
+          '</div>' +
+        '</div>' +
 
         '<div class="pf-row">' +
           pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: true, basis: '1 1 200px' }) +
@@ -250,6 +310,23 @@ SDMIS.formWizard = (function () {
         ui.select('', C.gender, it.gender).replace('class="', 'class="rep-gender flex-1 ') +
         '<button type="button" class="rep-del text-rose-500 text-sm px-1 no-print">&times;</button>' +
         '</div>';
+    }
+
+    // "Any other benefits" — multiple free-text entries with an Add More control
+    function benefitsBlock(s) {
+      var items = (s.benefits || []).filter(function (b) { return String(b || '').trim(); });
+      var rows = items.map(function (b) { return benefitRow(b); }).join('');
+      return '<div class="pf-block" data-field="benefits">' +
+        '<div class="flex items-center justify-between mb-1"><label class="pf-l">4. Any other benefits</label>' +
+        '<button type="button" class="ben-add text-xs text-indigo-600 hover:underline no-print">+ Add more</button></div>' +
+        '<div class="ben-rows space-y-2">' + (rows || '<p class="text-xs text-slate-400 ben-empty">None added</p>') + '</div>' +
+      '</div>';
+    }
+    function benefitRow(val) {
+      return '<div class="ben-row flex gap-2 items-center">' +
+        '<input type="text" value="' + ui.esc(val || '') + '" placeholder="e.g. Scholarship, Bus Pass" class="ben-input ' + ui.inputCls + '">' +
+        '<button type="button" class="ben-del text-rose-500 text-sm px-1 no-print">&times;</button>' +
+      '</div>';
     }
 
     // ---------- (b) Qualification & occupation ----------
@@ -314,6 +391,10 @@ SDMIS.formWizard = (function () {
           '<div class="mt-1">' + digitBoxes('udid', s.udid, 18) + '</div>' +
           '<p class="field-error hidden text-xs text-rose-600"></p>' +
         '</div>' +
+        '<div class="pf-row" id="validtill-wrap">' +
+          pf('Valid Till', ui.text('validTill', s.validTill, { type: 'date' }), 'validTill', { req: true, basis: '1 1 200px' }) +
+          '<div class="pf" style="flex:2 1 200px"><span class="pf-l text-slate-400" style="white-space:normal">Required for a Temporary certificate — the date up to which it remains valid.</span></div>' +
+        '</div>' +
         '<div class="pf-row">' +
           pf('Issue date', ui.text('issueDate', s.issueDate, { type: 'date' }), 'issueDate', { basis: '1 1 160px' }) +
           pf('Place of issue', ui.text('issuePlace', s.issuePlace), 'issuePlace', { basis: '2 1 200px' }) +
@@ -355,7 +436,7 @@ SDMIS.formWizard = (function () {
       var schemes = store.master('pensionSchemes');
       var services = store.master('services');
       var cgTypes = store.master('caregiverTypes');
-      return pf('4. Any other benefits', ui.text('benefits', s.benefits), 'benefits', { block: true }) +
+      return benefitsBlock(s) +
 
         // ---- Pension (req #14): Yes/No pills + scheme multiselect ----
         '<div class="pf-block" data-field="pensionStatus">' +
@@ -485,13 +566,39 @@ SDMIS.formWizard = (function () {
       $('#sec-1').on('change', '[name=residency]', refreshResidency);
       refreshResidency();
 
-      // Permanent address: shown only when NOT same as present address
-      function refreshPermAddr() {
+      // District → Block cascade: choosing a District refreshes the Block options
+      $('#sec-1').on('change', '[name=district]', function () {
+        var d = $(this).val();
+        var $blk = $('#sec-1 [name=block]');
+        var cur = $blk.val();
+        var opts = blockOpts(d);
+        var html = '<option value="">-- Select --</option>' + opts.map(function (o) {
+          return '<option value="' + ui.esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + ui.esc(o) + '</option>';
+        }).join('');
+        $blk.html(html);
+        if (cur && opts.indexOf(cur) === -1) $blk.val('');
+      });
+
+      // Present District → Present Block cascade
+      $('#sec-1').on('change', '[name=presentDistrict]', function () {
+        var d = $(this).val();
+        var $blk = $('#sec-1 [name=presentBlock]');
+        var cur = $blk.val();
+        var opts = presentBlockOpts(d);
+        var html = '<option value="">-- Select --</option>' + opts.map(function (o) {
+          return '<option value="' + ui.esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + ui.esc(o) + '</option>';
+        }).join('');
+        $blk.html(html);
+        if (cur && opts.indexOf(cur) === -1) $blk.val('');
+      });
+
+      // Present address: shown only when it differs from the permanent address
+      function refreshPresentAddr() {
         var same = $('#sec-1 [name=permSameAsCurrent]:checked').val() || 'Yes';
-        $('#perm-addr-wrap').toggle(same === 'No');
+        $('#present-addr-wrap').toggle(same === 'No');
       }
-      $('#sec-1').on('change', '[name=permSameAsCurrent]', refreshPermAddr);
-      refreshPermAddr();
+      $('#sec-1').on('change', '[name=permSameAsCurrent]', refreshPresentAddr);
+      refreshPresentAddr();
 
       // photo upload
       $('#photo-input').on('change', function () { readImage(this, '#photo-preview', function (b64) { rec.step1.photo = b64; }); });
@@ -525,7 +632,10 @@ SDMIS.formWizard = (function () {
         var dt = $('[name=disabilityType], [name=suspectedDisabilityType]').val();
         $('#dis-other-wrap').toggle(dt === 'Others');
         // UDID (Form A): required & shown only for a Permanent certificate; hidden for Temporary
-        $('#udid-wrap').toggle($('#sec-4 [name=certType]').val() === 'Permanent');
+        var certType = $('#sec-4 [name=certType]').val();
+        $('#udid-wrap').toggle(certType === 'Permanent');
+        // Valid Till (Form A): required & shown only for a Temporary certificate
+        $('#validtill-wrap').toggle(certType === 'Temporary');
         var aidsChecked = $('[name=aids]:checked').map(function () { return $(this).val(); }).get();
         $('#aids-other-wrap').toggle(aidsChecked.indexOf('Other') > -1);
 
@@ -542,6 +652,18 @@ SDMIS.formWizard = (function () {
         $('#cg-relation-wrap').toggle(cgPresent === 'Yes' && cgType === 'Family Member');
       }
       $('#sec-4').on('change', '[name=disabilityType], [name=suspectedDisabilityType], [name=certType], [name=aids], [name=pensionStatus], [name=caregiverPresent], [name=caregiverType]', refresh);
+
+      // "Any other benefits" — add / remove rows
+      $('#sec-4').on('click', '.ben-add', function () {
+        var $rows = $('#sec-4 .ben-rows');
+        $rows.find('.ben-empty').remove();
+        $rows.append(benefitRow(''));
+      });
+      $('#sec-4').on('click', '.ben-del', function () {
+        var $rows = $(this).closest('.ben-rows');
+        $(this).closest('.ben-row').remove();
+        if (!$rows.children('.ben-row').length) $rows.html('<p class="text-xs text-slate-400 ben-empty">None added</p>');
+      });
       // UDID: 18 discrete digit boxes — auto-advance, backspace-back, paste-fill
       function syncDigits(name) {
         var v = '';
@@ -598,7 +720,7 @@ SDMIS.formWizard = (function () {
         var d = ui.collect($body);
         var $enum = $('#wiz-body [name="enumeratorId"]');
         if ($enum.length) rec.enumeratorId = $enum.val() || null;
-        ['surveyDate', 'name', 'fatherName', 'motherName', 'dob', 'age', 'gender', 'address', 'permSameAsCurrent', 'permanentAddress', 'gpu', 'block', 'ward', 'houseNo', 'pin', 'contact', 'altMobile', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiDocType', 'coiDocNo', 'idProofNo'].forEach(function (k) {
+        ['surveyDate', 'name', 'fatherName', 'motherName', 'dob', 'age', 'gender', 'permanentAddress', 'permSameAsCurrent', 'address', 'district', 'gpu', 'block', 'ward', 'presentDistrict', 'presentBlock', 'presentGpu', 'presentWard', 'houseNo', 'pin', 'contact', 'altMobile', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiDocType', 'coiDocNo', 'idProofNo'].forEach(function (k) {
           if (typeof d[k] !== 'undefined') rec.step1[k] = d[k];
         });
         rec.gpu = rec.step1.gpu; rec.ward = rec.step1.ward;
@@ -616,12 +738,17 @@ SDMIS.formWizard = (function () {
         var d4 = ui.collect($body);
         var arrayKeys = { aids: 1, services: 1, pensionSchemes: 1 };
         Object.keys(target).forEach(function (k) {
-          if (arrayKeys[k]) target[k] = d4[k] || [];
+          if (k === 'benefits') { /* collected separately below */ }
+          else if (arrayKeys[k]) target[k] = d4[k] || [];
           else if (k === 'certImage') { /* handled by file reader */ }
           else if (typeof d4[k] !== 'undefined') target[k] = d4[k];
         });
-        // UDID only applies to a Permanent certificate — drop any stale value otherwise
+        // "Any other benefits" — one entry per row (blank rows dropped)
+        target.benefits = collectBenefits();
+        // UDID only applies to a Permanent certificate; Valid Till only to a Temporary one —
+        // drop any stale value otherwise
         if (formType === 'A' && target.certType !== 'Permanent') target.udid = '';
+        if (formType === 'A' && target.certType !== 'Temporary') target.validTill = '';
       }
     }
 
@@ -631,6 +758,15 @@ SDMIS.formWizard = (function () {
         var age = $(this).find('.rep-age').val();
         var gender = $(this).find('.rep-gender').val();
         if (age || gender) out.push({ age: age, gender: gender });
+      });
+      return out;
+    }
+
+    function collectBenefits() {
+      var out = [];
+      $('#sec-4 .ben-rows .ben-input').each(function () {
+        var v = ($(this).val() || '').trim();
+        if (v) out.push(v);
       });
       return out;
     }
@@ -650,17 +786,24 @@ SDMIS.formWizard = (function () {
         $('#wiz-body input, #wiz-body select, #wiz-body textarea').removeClass('border-rose-400');
       }
 
-      // Mandatory set (both Form A & B): Name, Gender, Present Address, Contact Number, Disability Type.
-      // Form A also requires Certificate Type; UDID is required only for a Permanent certificate.
-      // Everything else is optional.
+      // Mandatory set (both Form A & B): Name, Gender, Permanent Address, Contact Number, Disability Type.
+      // Present Address is required only when it differs from the permanent address.
+      // Form A also requires Certificate Type; UDID is required for a Permanent certificate and
+      // "Valid Till" is required for a Temporary certificate. Everything else is optional.
       if (n === 1) {
         var s = rec.step1;
-        if (zone && (zone.enumerators || []).length && !rec.enumeratorId) fail('enumeratorId', 'Select the enumerator who collected this survey');
+        if (enumList.length && !rec.enumeratorId) fail('enumeratorId', 'Select the enumerator who collected this survey');
         if (!String(s.name || '').trim()) fail('name');
         if (!String(s.gender || '').trim()) fail('gender');
-        if (!String(s.address || '').trim()) fail('address');
+        if (!String(s.permanentAddress || '').trim()) fail('permanentAddress');
+        if (!String(s.district || '').trim()) fail('district', 'Select the district');
+        if (!String(s.block || '').trim()) fail('block', 'Select the block');
         if (!String(s.contact || '').trim()) fail('contact');
-        if (s.permSameAsCurrent === 'No' && !String(s.permanentAddress || '').trim()) fail('permanentAddress', 'Enter the permanent address');
+        if (s.permSameAsCurrent === 'No') {
+          if (!String(s.address || '').trim()) fail('address', 'Enter the present address');
+          if (!String(s.presentDistrict || '').trim()) fail('presentDistrict', 'Select the district');
+          if (!String(s.presentBlock || '').trim()) fail('presentBlock', 'Select the block');
+        }
         // soft format check (only when a value is present — the field itself is optional)
         if (s.pin && !/^\d{6}$/.test(s.pin)) fail('pin', 'PIN must be 6 digits');
       } else if (n === 2 || n === 3) {
@@ -674,6 +817,7 @@ SDMIS.formWizard = (function () {
             if (!String(a.udid || '').trim()) fail('udid', 'UDID is required for a Permanent certificate');
             else if (a.udid.length !== 18) fail('udid', 'UDID must be 18 digits');
           }
+          if (a.certType === 'Temporary' && !String(a.validTill || '').trim()) fail('validTill', 'Valid Till date is required for a Temporary certificate');
         } else {
           var b = rec.step4B;
           if (!b.suspectedDisabilityType) fail('suspectedDisabilityType', 'Type of disability is required');
@@ -732,7 +876,8 @@ SDMIS.formWizard = (function () {
 
   // ============ READ-ONLY RENDER (for SWO review / detail) ============
   function readOnlyHtml(rec) {
-    var zone = store.find('zones', rec.zoneId);
+    // Enumerators now live on the creating inspector (flat per-inspector list)
+    var creator = rec.createdBy ? store.find('officials', rec.createdBy) : null;
     function row(label, val) {
       if (val === '' || val === null || typeof val === 'undefined' || (Array.isArray(val) && !val.length)) val = '—';
       if (Array.isArray(val)) val = val.join(', ');
@@ -758,23 +903,28 @@ SDMIS.formWizard = (function () {
     var fam = (s1.offsprings || []).map(function (o) { return o.age + '/' + o.gender; }).join(', ');
     var sib = (s1.siblings || []).map(function (o) { return o.age + '/' + o.gender; }).join(', ');
     var survey = rec.surveyId ? store.find('surveys', rec.surveyId) : null;
-    var ens = (zone && zone.enumerators) || [];
+    var ens = (creator && creator.enumerators) || [];
     var en = ens.filter(function (e) { return e.id === rec.enumeratorId; })[0] || {};
 
     var html =
       section('Survey Cover',
         row('Survey', survey ? survey.name + ' (' + survey.period + ')' : '—') +
         row('Survey Date', s1.surveyDate) +
-        row('Zone', zone ? zone.name + ' (' + zone.code + ')' : '—') +
+        row('District', s1.district) + row('Block', s1.block) +
         '<div class="mt-2 text-xs font-semibold text-slate-500 uppercase">Enumerator</div>' +
         row('Name', en.name) + row('AWC', en.awc) + row('Project', en.project) + row('District', en.district) + row('Contact', en.contact)
       ) +
       section('Personal Information',
         row('Name', s1.name) + row("Father's Name", s1.fatherName || s1.parentName) + row("Mother's Name", s1.motherName) +
         row('Date of Birth', s1.dob) + row('Age', s1.age) + row('Gender', s1.gender) +
-        row('Present Address', s1.address) +
-        row('Permanent Address', s1.permSameAsCurrent === 'No' ? s1.permanentAddress : 'Same as present address') +
-        row('GPU', s1.gpu) + row('Block', s1.block) + row('Ward', s1.ward) + row('House No.', s1.houseNo) +
+        row('Permanent Address', s1.permanentAddress || s1.address) +
+        row('District', s1.district) + row('Block', s1.block) + row('GPU', s1.gpu) + row('Ward', s1.ward) +
+        row('Present Address', s1.permSameAsCurrent === 'No' ? (s1.address || '—') : 'Same as permanent address') +
+        (s1.permSameAsCurrent === 'No'
+          ? row('Present District', s1.presentDistrict) + row('Present Block', s1.presentBlock) +
+            row('Present GPU', s1.presentGpu) + row('Present Ward', s1.presentWard)
+          : '') +
+        row('House No.', s1.houseNo) +
         row('PIN', s1.pin) + row('Contact', s1.contact) + row('Alternate Mobile', s1.altMobile) +
         row('Aadhaar', s1.aadhaar) + row('Voter ID', s1.voterId) +
         row('Additional Contact', [s1.altContactName, s1.altContactNo].filter(Boolean).join(' / ')) +
@@ -801,7 +951,8 @@ SDMIS.formWizard = (function () {
       var a = rec.step4A;
       html += section('Disability Information (Certified)',
         row('Disability Type', a.disabilityType + (a.disabilityOther ? ' (' + a.disabilityOther + ')' : '')) +
-        row('Disability %', a.disabilityPercent) + row('Certificate Type', a.certType || a.certNo) + row('UDID', a.udid) +
+        row('Disability %', a.disabilityPercent) + row('Certificate Type', a.certType || a.certNo) +
+        (a.certType === 'Temporary' ? row('Valid Till', a.validTill) : row('UDID', a.udid)) +
         row('Issue Date', a.issueDate) + row('Place of Issue', a.issuePlace) +
         row('Aids & Appliances', a.aids) + (a.aidsOther ? row('Other Aid', a.aidsOther) : '') +
         row('Benefits', a.benefits) + pensionRows(a) +

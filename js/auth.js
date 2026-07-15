@@ -35,11 +35,16 @@ SDMIS.auth = (function () {
     }[role] || '#/login';
   }
 
-  // zone object for the current user (inspectors/swos)
-  function currentZone() {
+  // Blocks an inspector is mapped to (array of block names)
+  function currentBlocks() {
     var u = current();
-    if (!u || !u.zoneId) return null;
-    return store.find('zones', u.zoneId);
+    return (u && Array.isArray(u.blocks)) ? u.blocks : [];
+  }
+
+  // District a SWO is mapped to (name), or ''
+  function currentDistrict() {
+    var u = current();
+    return (u && u.district) ? u.district : '';
   }
 
   return {
@@ -48,6 +53,7 @@ SDMIS.auth = (function () {
     current: current,
     isLoggedIn: isLoggedIn,
     landing: landing,
-    currentZone: currentZone
+    currentBlocks: currentBlocks,
+    currentDistrict: currentDistrict
   };
 })();

@@ -8,7 +8,7 @@ SDMIS.router.register('swo', {
     var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
     var auth = SDMIS.auth;
     var user = auth.current();
-    var zone = auth.currentZone();
+    var district = auth.currentDistrict();   // the district this SWO verifies
     var PER = 10;
     var ENABLE_CONVERT = false; // Form B → Form A conversion is hidden for now
 
@@ -16,16 +16,37 @@ SDMIS.router.register('swo', {
       var rec = store.find('beneficiaries', params[1]);
       if (rec) return review(rec);
     }
+    if (params[0] === 'edit' && params[1]) {
+      var erec = store.find('beneficiaries', params[1]);
+      if (erec && district && erec.step1 && erec.step1.district === district) return editRecord(erec);
+    }
     return list();
 
-    function zoneRecords() {
-      return store.where('beneficiaries', function (b) { return zone && b.zoneId === zone.id; })
+    // SWOs may correct submitted application details when required (req #6).
+    // Re-uses the same data-entry sheet the inspector fills; on save it returns to review.
+    function editRecord(rec) {
+      // address dropdowns limited to the SWO's district; enumerators come from the record's inspector
+      var blockObjs = store.blocksInDistrict(district);
+      var creator = rec.createdBy ? store.find('officials', rec.createdBy) : null;
+      SDMIS.formWizard.open($c, {
+        record: rec, blocks: blockObjs, enumerators: (creator && creator.enumerators) || [],
+        afterSave: function (saved) {
+          store.audit('swo-edit', saved.id, 'Details corrected by SWO');
+          ui.toast('Application details updated', 'success');
+          SDMIS.router.go('#/swo/review/' + saved.id);
+        },
+        onCancel: function () { SDMIS.router.go('#/swo/review/' + rec.id); }
+      });
+    }
+
+    function districtRecords() {
+      return store.where('beneficiaries', function (b) { return district && b.step1 && b.step1.district === district; })
         .sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
     }
     function surveyName(id) { var s = id ? store.find('surveys', id) : null; return s ? s.period : '—'; }
 
     function list() {
-      var recs = zoneRecords();
+      var recs = districtRecords();
       var counts = {
         submitted: recs.filter(function (r) { return r.status === 'submitted'; }).length,
         approved: recs.filter(function (r) { return r.status === 'approved'; }).length,
@@ -51,7 +72,7 @@ SDMIS.router.register('swo', {
             ui.select('swo-survey', surveys.map(function (s) { return { value: s.id, label: s.period }; }), '', { placeholder: 'All surveys' }).replace(ui.inputCls, ui.inputCls + ' w-full sm:w-40') +
           '</div>' +
           '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
-            '<th class="px-3 py-2">Beneficiary</th><th class="px-3 py-2">Form</th><th class="px-3 py-2">Survey</th><th class="px-3 py-2">GPU · Ward</th><th class="px-3 py-2">Age/Gender</th><th class="px-3 py-2">Status</th><th></th>' +
+            '<th class="px-3 py-2">Beneficiary</th><th class="px-3 py-2">Form</th><th class="px-3 py-2">Survey</th><th class="px-3 py-2">Block · Ward</th><th class="px-3 py-2">Age/Gender</th><th class="px-3 py-2">Status</th><th></th>' +
           '</tr></thead><tbody id="swo-rows"></tbody></table></div>' +
           '<div id="swo-pager"></div>' +
         '</div>'
@@ -78,7 +99,7 @@ SDMIS.router.register('swo', {
             '<td class="px-3 py-2 text-sm font-medium text-slate-700">' + ui.esc(r.step1.name || '(no name)') + '</td>' +
             '<td class="px-3 py-2">' + (r.formType === 'A' ? ui.badge('A', 'bg-emerald-100 text-emerald-700') : ui.badge('B', 'bg-amber-100 text-amber-700')) + '</td>' +
             '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc(surveyName(r.surveyId)) + '</td>' +
-            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc(r.gpu || '—') + ' · ' + ui.esc(r.ward || '—') + '</td>' +
+            '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc((r.step1 && r.step1.block) || '—') + ' · ' + ui.esc(r.ward || '—') + '</td>' +
             '<td class="px-3 py-2 text-sm text-slate-500">' + ui.esc((r.step1.age || '—') + '/' + (r.step1.gender || '—')) + '</td>' +
             '<td class="px-3 py-2">' + ui.statusBadge(r.status) + '</td>' +
             '<td class="px-3 py-2 text-right whitespace-nowrap">' +
@@ -118,7 +139,8 @@ SDMIS.router.register('swo', {
     function review(rec) {
       var inspector = store.find('officials', rec.createdBy);
       var actionBar = rec.status === 'submitted'
-        ? '<div class="flex gap-2">' +
+        ? '<div class="flex flex-wrap gap-2">' +
+            '<button id="btn-edit" class="px-4 py-2 text-sm rounded-md border border-indigo-300 text-indigo-600 hover:bg-indigo-50">✎ Edit Details</button>' +
             '<button id="btn-return" class="px-4 py-2 text-sm rounded-md border border-rose-300 text-rose-600 hover:bg-rose-50">↩ Return for Correction</button>' +
             '<button id="btn-approve" class="px-4 py-2 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700">✓ Approve</button>' +
           '</div>'
@@ -173,6 +195,8 @@ SDMIS.router.register('swo', {
 
       $('#back').on('click', function () { SDMIS.router.go('#/swo'); });
 
+      $('#btn-edit').on('click', function () { SDMIS.router.go('#/swo/edit/' + rec.id); });
+
       $('#btn-approve').on('click', function () {
         store.update('beneficiaries', rec.id, { status: 'approved', reviewedBy: user.id });
         store.audit('approve', rec.id, 'Approved by SWO');
@@ -208,6 +232,7 @@ SDMIS.router.register('swo', {
         ui.field('Disability Percentage (%)', ui.text('disabilityPercent', '', { type: 'number', attrs: 'min=0 max=100' }), { name: 'disabilityPercent' }) +
         ui.field('Certificate Type', ui.select('certType', C.certificateTypes, ''), { required: true, name: 'certType' }) +
         ui.field('UDID Number', ui.text('udid', '', { attrs: 'inputmode="numeric" maxlength=18' }), { name: 'udid', hint: '18 digits — required for a Permanent certificate' }) +
+        ui.field('Valid Till', ui.text('validTill', '', { type: 'date' }), { name: 'validTill', hint: 'Required for a Temporary certificate' }) +
         ui.field('Certificate Issue Date', ui.text('issueDate', '', { type: 'date' }), { name: 'issueDate' }) +
         ui.field('Place of Issue', ui.text('issuePlace', ''), { name: 'issuePlace' });
 
@@ -223,6 +248,7 @@ SDMIS.router.register('swo', {
             if (!String(d.udid || '').trim()) { ui.toast('UDID is required for a Permanent certificate', 'error'); return false; }
             if (d.udid.length !== 18) { ui.toast('UDID must be 18 digits', 'error'); return false; }
           }
+          if (d.certType === 'Temporary' && !String(d.validTill || '').trim()) { ui.toast('Valid Till date is required for a Temporary certificate', 'error'); return false; }
 
           // build the new Form A record, retaining steps 1-3
           var newRec = JSON.parse(JSON.stringify(rec));
@@ -236,9 +262,10 @@ SDMIS.router.register('swo', {
           newRec.step4A = {
             disabilityType: d.disabilityType, disabilityOther: '',
             disabilityPercent: d.disabilityPercent, certType: d.certType, certImage: '',
+            validTill: d.certType === 'Temporary' ? (d.validTill || '') : '',
             udid: d.certType === 'Permanent' ? (d.udid || '') : '', issueDate: d.issueDate || '', issuePlace: d.issuePlace || '',
             aids: (rec.step4B && rec.step4B.aids) || [], aidsOther: (rec.step4B && rec.step4B.aidsOther) || '',
-            benefits: (rec.step4B && rec.step4B.benefits) || '',
+            benefits: (rec.step4B && rec.step4B.benefits) || [],
             pensionStatus: (rec.step4B && rec.step4B.pensionStatus) || '',
             pensionSchemes: (rec.step4B && rec.step4B.pensionSchemes) || [],
             pensionSince: (rec.step4B && rec.step4B.pensionSince) || '',

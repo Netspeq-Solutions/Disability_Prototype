@@ -9,11 +9,12 @@ SDMIS.router.register('login', {
     var ui = SDMIS.ui;
 
     // quick-pick demo accounts
-    var firstZone = store.all('zones')[0];
+    var firstInsp = store.where('officials', function (o) { return o.role === 'inspector'; })[0];
+    var firstSwo = store.where('officials', function (o) { return o.role === 'swo'; })[0];
     var demo = [
-      { user: 'admin', role: 'Administrator', desc: 'Configure zones & officials' },
-      { user: 'insp_' + (firstZone ? firstZone.code.toLowerCase() : 'z01') + '_a', role: 'Inspector', desc: (firstZone ? firstZone.name : '') + ' zone data entry' },
-      { user: 'swo_' + (firstZone ? firstZone.code.toLowerCase() : 'z01'), role: 'SWO', desc: 'Verify ' + (firstZone ? firstZone.name : '') + ' records' },
+      { user: 'admin', role: 'Administrator', desc: 'Configure officials & masters' },
+      { user: firstInsp ? firstInsp.username : 'insp1', role: 'Inspector', desc: firstInsp && firstInsp.blocks ? ('Blocks: ' + firstInsp.blocks.join(', ')) : 'Block data entry' },
+      { user: firstSwo ? firstSwo.username : 'swo1', role: 'SWO', desc: firstSwo && firstSwo.district ? ('Verify ' + firstSwo.district + ' district') : 'District verification' },
       { user: 'hq', role: 'HQ Official', desc: 'Dashboard & reports' }
     ];
 
@@ -36,10 +37,10 @@ SDMIS.router.register('login', {
             '<h1 class="text-2xl font-bold mb-1">SDMIS</h1>' +
             '<p class="text-indigo-200 text-sm mb-4">State Disability Management Information System</p>' +
             '<p class="text-slate-300 text-xs leading-relaxed">Women, Child, Senior Citizen &amp; Divyangjan Welfare Department. ' +
-            'Zone-wise data entry of Form A (Certified) and Form B (Suspected) disability cases, verification and monitoring.</p>' +
+            'Block-wise data entry of Form A (Certified) and Form B (Suspected) disability cases, District-level verification and monitoring.</p>' +
             '<div class="mt-6 grid grid-cols-3 gap-2 text-center">' +
-              '<div class="bg-slate-700/50 rounded-lg py-2"><div class="text-lg font-bold">58</div><div class="text-[10px] text-slate-400">Zones</div></div>' +
-              '<div class="bg-slate-700/50 rounded-lg py-2"><div class="text-lg font-bold">116</div><div class="text-[10px] text-slate-400">Inspectors</div></div>' +
+              '<div class="bg-slate-700/50 rounded-lg py-2"><div class="text-lg font-bold">' + store.master('districts').length + '</div><div class="text-[10px] text-slate-400">Districts</div></div>' +
+              '<div class="bg-slate-700/50 rounded-lg py-2"><div class="text-lg font-bold">' + store.master('blocks').length + '</div><div class="text-[10px] text-slate-400">Blocks</div></div>' +
               '<div class="bg-slate-700/50 rounded-lg py-2"><div class="text-lg font-bold">2</div><div class="text-[10px] text-slate-400">Forms</div></div>' +
             '</div>' +
           '</div>' +

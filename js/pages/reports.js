@@ -6,15 +6,9 @@ SDMIS.router.register('reports', {
   title: 'Reports',
   render: function ($c, params) {
     var store = SDMIS.store, ui = SDMIS.ui, C = SDMIS.constants;
-    var zones = store.all('zones');
     var all = store.all('beneficiaries');
 
     // ---- field accessors ----
-    function distinct(getter) {
-      var set = {};
-      all.forEach(function (r) { var v = getter(r); if (v) set[v] = true; });
-      return Object.keys(set).sort();
-    }
     function disabilityOf(r) {
       return r.formType === 'A' ? (r.step4A && r.step4A.disabilityType) : (r.step4B && r.step4B.suspectedDisabilityType);
     }
@@ -30,7 +24,59 @@ SDMIS.router.register('reports', {
       var g = C.ageGroups.filter(function (x) { return a >= x.min && a <= x.max; })[0];
       return g ? g.value : '';
     }
-    function zoneName(id) { var z = store.find('zones', id); return z ? z.name : '—'; }
+    function districtOf(r) { return (r.step1 && r.step1.district) || '—'; }
+    function blockOf(r) { return (r.step1 && r.step1.block) || '—'; }
+    // "Temporary" = beneficiary has a separate present/current address; "Permanent" = same as permanent
+    function addrTypeOf(r) { return (r.step1 && r.step1.permSameAsCurrent === 'No') ? 'Temporary' : 'Permanent'; }
+
+    // ---- address-aware field access (permanent vs present) ----
+    // The Address Type filter decides which address the District/Block/GPU/Ward filters test against.
+    function permField(r, field) {
+      var s = r.step1 || {};
+      if (field === 'gpu') return s.gpu || r.gpu || '';
+      if (field === 'ward') return s.ward || r.ward || '';
+      return s[field] || '';
+    }
+    function presentField(r, field) {
+      var s = r.step1 || {};
+      if (s.permSameAsCurrent !== 'No') return permField(r, field); // present is the same as permanent
+      var m = { district: 'presentDistrict', block: 'presentBlock', gpu: 'presentGpu', ward: 'presentWard' };
+      return s[m[field]] || '';
+    }
+    // mode: 'Permanent' → test permanent only · 'Present' → present only · else (All) → either matches
+    function addrMatches(r, field, value, mode) {
+      if (!value) return true;
+      if (mode === 'Permanent') return permField(r, field) === value;
+      if (mode === 'Present') return presentField(r, field) === value;
+      return permField(r, field) === value || presentField(r, field) === value;
+    }
+    // option list = union of permanent + present distinct values so Present-mode filters have choices
+    function distinctAddr(field) {
+      var set = {};
+      all.forEach(function (r) {
+        var p = permField(r, field); if (p) set[p] = true;
+        var q = presentField(r, field); if (q) set[q] = true;
+      });
+      return Object.keys(set).sort();
+    }
+
+    // Full application detail (read-only) opened from the report list
+    function openApplication(rec) {
+      var body =
+        '<div class="flex items-center gap-2 mb-3">' +
+          (rec.formType === 'A' ? ui.badge('Form A · Certified', 'bg-emerald-100 text-emerald-700') : ui.badge('Form B · Suspected', 'bg-amber-100 text-amber-700')) +
+          ui.statusBadge(rec.status) +
+        '</div>' +
+        SDMIS.formWizard.readOnlyHtml(rec) +
+        '<div class="mt-5 pt-4 border-t">' +
+          '<h4 class="text-sm font-semibold text-indigo-600 mb-3 uppercase tracking-wide">Uploaded Documents</h4>' +
+          '<div id="rep-view-docs">' + SDMIS.formWizard.documentsHtml(rec) + '</div>' +
+        '</div>';
+      ui.modal({ title: rec.step1.name || 'Application', bodyHtml: body, wide: true, hideFooter: true });
+      $('#rep-view-docs').on('click', '.doc-thumb', function () {
+        ui.lightbox(SDMIS.formWizard.recordImages(rec), parseInt($(this).data('idx'), 10) || 0);
+      });
+    }
     function surveyPeriod(id) { var s = id ? store.find('surveys', id) : null; return s ? s.period : '—'; }
 
     function tally(list, getter) {
@@ -44,12 +90,12 @@ SDMIS.router.register('reports', {
     var PRESETS = [
       {
         id: 'caregiver', name: 'Caregiver Coverage Report',
-        desc: 'Beneficiaries who have a caregiver, broken down by caregiver type and zone.',
+        desc: 'Beneficiaries who have a caregiver, broken down by caregiver type and district.',
         predicate: function (r) { return caregiverOf(r) === 'Yes'; },
         breakdowns: function (list) {
           return [
             { title: 'By Caregiver Type', obj: tally(list, caregiverTypeOf) },
-            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+            { title: 'By District', obj: tally(list, districtOf) }
           ];
         }
       },
@@ -60,29 +106,29 @@ SDMIS.router.register('reports', {
         breakdowns: function (list) {
           return [
             { title: 'By Caregiver Type', obj: tally(list, caregiverTypeOf) },
-            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+            { title: 'By District', obj: tally(list, districtOf) }
           ];
         }
       },
       {
         id: 'pension', name: 'Pension Scheme Enrolment Report',
-        desc: 'Pension recipients, broken down by scheme and zone.',
+        desc: 'Pension recipients, broken down by scheme and district.',
         predicate: function (r) { return pensionOf(r) === 'Yes'; },
         breakdowns: function (list) {
           return [
             { title: 'By Pension Scheme', obj: tallyFlat(list, schemesOf) },
-            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+            { title: 'By District', obj: tally(list, districtOf) }
           ];
         }
       },
       {
         id: 'services', name: 'Services Utilisation Report',
-        desc: 'Beneficiaries receiving one or more services, by service type and zone.',
+        desc: 'Beneficiaries receiving one or more services, by service type and district.',
         predicate: function (r) { return servicesOf(r).length > 0; },
         breakdowns: function (list) {
           return [
             { title: 'By Service', obj: tallyFlat(list, servicesOf) },
-            { title: 'By Zone', obj: tally(list, function (r) { return zoneName(r.zoneId); }) }
+            { title: 'By District', obj: tally(list, districtOf) }
           ];
         }
       }
@@ -95,9 +141,9 @@ SDMIS.router.register('reports', {
     function renderOutput(list, opts) {
       opts = opts || {};
       lastRows = list;
-      var byZone = {}, byForm = { A: 0, B: 0 };
+      var byDistrict = {}, byForm = { A: 0, B: 0 };
       list.forEach(function (r) {
-        byZone[zoneName(r.zoneId)] = (byZone[zoneName(r.zoneId)] || 0) + 1;
+        byDistrict[districtOf(r)] = (byDistrict[districtOf(r)] || 0) + 1;
         byForm[r.formType]++;
       });
 
@@ -117,7 +163,7 @@ SDMIS.router.register('reports', {
           var d = disabilityOf(r); if (d) byDis[d] = (byDis[d] || 0) + 1;
           byGender[r.step1.gender || 'Unknown'] = (byGender[r.step1.gender || 'Unknown'] || 0) + 1;
         });
-        breakdowns = [{ title: 'Zone-wise', obj: byZone }, { title: 'Disability-wise', obj: byDis }, { title: 'Gender-wise', obj: byGender }];
+        breakdowns = [{ title: 'District-wise', obj: byDistrict }, { title: 'Disability-wise', obj: byDis }, { title: 'Gender-wise', obj: byGender }];
       }
       var reportBanner = opts.title
         ? '<div class="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-5"><h3 class="font-semibold text-indigo-800 text-sm">' + ui.esc(opts.title) + '</h3>' +
@@ -132,7 +178,7 @@ SDMIS.router.register('reports', {
             '<div class="bg-indigo-600 text-white rounded-xl p-4"><div class="text-2xl font-bold">' + list.length + '</div><div class="text-xs opacity-80">Matching Records</div></div>' +
             '<div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-emerald-600">' + byForm.A + '</div><div class="text-xs text-slate-400">Form A (Certified)</div></div>' +
             '<div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-amber-600">' + byForm.B + '</div><div class="text-xs text-slate-400">Form B (Suspected)</div></div>' +
-            '<div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-slate-700">' + Object.keys(byZone).length + '</div><div class="text-xs text-slate-400">Zones Covered</div></div>' +
+            '<div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-slate-700">' + Object.keys(byDistrict).length + '</div><div class="text-xs text-slate-400">Districts Covered</div></div>' +
           '</div>' +
           '<div class="grid md:grid-cols-3 gap-4 mb-5">' +
             breakdowns.map(function (b) { return statTable(b.title, b.obj); }).join('') +
@@ -140,7 +186,7 @@ SDMIS.router.register('reports', {
           '<div class="bg-white border rounded-xl shadow-sm">' +
             '<div class="px-4 py-3 border-b font-medium text-slate-700 text-sm">Detailed Beneficiary List</div>' +
             '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
-              '<th class="px-2 py-2">#</th><th class="px-2 py-2">Name</th><th class="px-2 py-2">Form</th><th class="px-2 py-2">Survey</th><th class="px-2 py-2">Zone</th><th class="px-2 py-2">GPU</th><th class="px-2 py-2">Age/Gender</th><th class="px-2 py-2">Disability</th><th class="px-2 py-2">Status</th>' +
+              '<th class="px-2 py-2">#</th><th class="px-2 py-2">Name</th><th class="px-2 py-2">Form</th><th class="px-2 py-2">Survey</th><th class="px-2 py-2">District</th><th class="px-2 py-2">Block</th><th class="px-2 py-2">Age/Gender</th><th class="px-2 py-2">Disability</th><th class="px-2 py-2">Status</th><th class="px-2 py-2 no-print"></th>' +
             '</tr></thead><tbody id="rep-rows"></tbody></table></div>' +
             '<div id="rep-pager" class="no-print"></div>' +
           '</div>' +
@@ -157,14 +203,15 @@ SDMIS.router.register('reports', {
             '<td class="px-2 py-1.5 text-sm font-medium text-slate-700">' + ui.esc(r.step1.name || '—') + '</td>' +
             '<td class="px-2 py-1.5">' + (r.formType === 'A' ? ui.badge('A', 'bg-emerald-100 text-emerald-700') : ui.badge('B', 'bg-amber-100 text-amber-700')) + '</td>' +
             '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(surveyPeriod(r.surveyId)) + '</td>' +
-            '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(zoneName(r.zoneId)) + '</td>' +
-            '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(r.gpu || '—') + '</td>' +
+            '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(districtOf(r)) + '</td>' +
+            '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(blockOf(r)) + '</td>' +
             '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc((r.step1.age || '—') + '/' + (r.step1.gender || '—')) + '</td>' +
             '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(disabilityOf(r) || '—') + '</td>' +
             '<td class="px-2 py-1.5">' + ui.statusBadge(r.status) + '</td>' +
+            '<td class="px-2 py-1.5 no-print"><button class="view-rec text-xs font-medium text-indigo-600 hover:underline" data-id="' + r.id + '">View</button></td>' +
           '</tr>';
         }).join('');
-        $('#rep-rows').html(rows || '<tr><td colspan="9">' + ui.emptyState('No records match') + '</td></tr>');
+        $('#rep-rows').html(rows || '<tr><td colspan="10">' + ui.emptyState('No records match') + '</td></tr>');
         ui.renderPager($('#rep-pager'), meta, function (p) { page = p; drawTable(); });
       }
       drawTable();
@@ -172,19 +219,31 @@ SDMIS.router.register('reports', {
 
     function exportCsv() {
       if (!lastRows.length) { ui.toast('No records to export', 'warn'); return; }
-      var headers = ['Name', 'Form', 'Survey', 'Zone', 'GPU', 'Block', 'Ward', 'Age', 'Gender', 'Disability', 'Education', 'Occupation', 'Annual Income', 'House Type', 'Residency',
-        'Pension', 'Pension Schemes', 'Services', 'Caregiver', 'Caregiver Type', 'Caregiver Salary/Fee', 'Status', 'Enumerator'];
+      var headers = ['Name', 'Form', 'Survey', 'District', 'Block', 'GPU', 'Ward',
+        'Address Type', 'Present Address', 'Present District', 'Present Block', 'Present GPU', 'Present Ward',
+        'Age', 'Gender', 'Disability',
+        'Certificate Type', 'Valid Till', 'Education', 'Occupation', 'Annual Income', 'House Type', 'Residency',
+        'Pension', 'Pension Schemes', 'Services', 'Caregiver', 'Caregiver Type', 'Caregiver Salary/Fee', 'Other Benefits', 'Status', 'Enumerator'];
       var lines = [headers.join(',')];
       lastRows.forEach(function (r) {
-        var zoneRec = store.find('zones', r.zoneId);
-        var ens = (zoneRec && zoneRec.enumerators) || [];
+        var creator = r.createdBy ? store.find('officials', r.createdBy) : null;
+        var ens = (creator && creator.enumerators) || [];
         var en = ens.filter(function (e) { return e.id === r.enumeratorId; })[0] || {};
         var s4 = step4Of(r) || {};
+        var diff = r.step1.permSameAsCurrent === 'No';
         var row = [
-          r.step1.name, r.formType, surveyPeriod(r.surveyId), zoneName(r.zoneId), r.gpu, r.step1.block, r.ward, r.step1.age, r.step1.gender,
-          disabilityOf(r), r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType,
+          r.step1.name, r.formType, surveyPeriod(r.surveyId), districtOf(r), blockOf(r), r.gpu, r.ward,
+          addrTypeOf(r),
+          (diff ? (r.step1.address || '') : 'Same as permanent'),
+          (diff ? (r.step1.presentDistrict || '') : ''), (diff ? (r.step1.presentBlock || '') : ''),
+          (diff ? (r.step1.presentGpu || '') : ''), (diff ? (r.step1.presentWard || '') : ''),
+          r.step1.age, r.step1.gender,
+          disabilityOf(r),
+          (r.formType === 'A' ? (s4.certType || '') : ''), (r.formType === 'A' ? (s4.validTill || '') : ''),
+          r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType,
           (r.step1.residency === 'local' ? 'Local' : (r.step1.residency ? 'Others' : '')),
           pensionOf(r), schemesOf(r).join('; '), servicesOf(r).join('; '), caregiverOf(r), caregiverTypeOf(r), s4.caregiverSalary,
+          (s4.benefits || []).join('; '),
           C.statuses[r.status], en.name
         ].map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; });
         lines.push(row.join(','));
@@ -215,6 +274,10 @@ SDMIS.router.register('reports', {
       renderOutput(list, { title: def.name, desc: def.desc, breakdowns: def.breakdowns(list) });
       $('#export-csv').on('click', exportCsv);
       $('#print-pdf').on('click', function () { window.print(); });
+      $c.off('click.repview').on('click.repview', '.view-rec', function () {
+        var rec = store.find('beneficiaries', $(this).data('id'));
+        if (rec) openApplication(rec);
+      });
     }
 
     // ---- main filterable report ----
@@ -232,9 +295,11 @@ SDMIS.router.register('reports', {
           '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3" id="filter-grid">' +
             fSelect('surveyId', 'Survey', store.all('surveys').map(function (s) { return { value: s.id, label: s.period }; })) +
             fSelect('formType', 'Form Type', [{ value: 'A', label: 'Form A (Certified)' }, { value: 'B', label: 'Form B (Suspected)' }]) +
-            fSelect('zoneId', 'Zone', zones.map(function (z) { return { value: z.id, label: z.name }; })) +
-            fSelect('gpu', 'GPU', distinct(function (r) { return r.gpu; })) +
-            fSelect('ward', 'Ward', distinct(function (r) { return r.ward; })) +
+            fSelect('addrType', 'Address Type', [{ value: 'Permanent', label: 'Permanent Address' }, { value: 'Present', label: 'Present Address' }]) +
+            fSelect('district', 'District', distinctAddr('district')) +
+            fSelect('block', 'Block', distinctAddr('block')) +
+            fSelect('gpu', 'GPU', distinctAddr('gpu')) +
+            fSelect('ward', 'Ward', distinctAddr('ward')) +
             fSelect('gender', 'Gender', C.gender) +
             fSelect('ageGroup', 'Age Group', C.ageGroups) +
             fSelect('disability', 'Disability Type', store.master('disabilityType')) +
@@ -269,12 +334,14 @@ SDMIS.router.register('reports', {
       }
 
       function applyFilters(f) {
+        var mode = f.addrType || 'All'; // which address the District/Block/GPU/Ward filters test against
         return all.filter(function (r) {
           if (f.surveyId && r.surveyId !== f.surveyId) return false;
           if (f.formType && r.formType !== f.formType) return false;
-          if (f.zoneId && r.zoneId !== f.zoneId) return false;
-          if (f.gpu && r.gpu !== f.gpu) return false;
-          if (f.ward && r.ward !== f.ward) return false;
+          if (!addrMatches(r, 'district', f.district, mode)) return false;
+          if (!addrMatches(r, 'block', f.block, mode)) return false;
+          if (!addrMatches(r, 'gpu', f.gpu, mode)) return false;
+          if (!addrMatches(r, 'ward', f.ward, mode)) return false;
           if (f.gender && r.step1.gender !== f.gender) return false;
           if (f.ageGroup && ageGroupOf(r) !== f.ageGroup) return false;
           if (f.disability && disabilityOf(r) !== f.disability) return false;
@@ -300,6 +367,10 @@ SDMIS.router.register('reports', {
       $('#reset-filters').on('click', function () { $('#filter-grid select').val(''); $('#search-name').val(''); renderOutput(all); });
       $('#export-csv').on('click', exportCsv);
       $('#print-pdf').on('click', function () { window.print(); });
+      $c.off('click.repview').on('click.repview', '.view-rec', function () {
+        var rec = store.find('beneficiaries', $(this).data('id'));
+        if (rec) openApplication(rec);
+      });
 
       renderOutput(all); // initial render with all records
     }

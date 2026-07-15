@@ -34,6 +34,27 @@ SDMIS.constants = {
 
   coiDocTypes: ['COI', 'RC', 'SSE'],
 
+  // ---- Address masters (admin-configurable) ----
+  // Inspectors are mapped to one or more Blocks; SWOs are mapped to a District.
+  // Each Block belongs to a District, so a District-level SWO covers all its blocks.
+  districts: ['Gangtok', 'Mangan', 'Pakyong', 'Namchi', 'Gyalshing', 'Soreng'],
+  blocks: [
+    { name: 'Rakdong-Tintek', district: 'Gangtok' },
+    { name: 'Khamdong', district: 'Gangtok' },
+    { name: 'Dzongu', district: 'Mangan' },
+    { name: 'Chungthang', district: 'Mangan' },
+    { name: 'Duga', district: 'Pakyong' },
+    { name: 'Rangpo', district: 'Pakyong' },
+    { name: 'Namthang', district: 'Namchi' },
+    { name: 'Jorethang', district: 'Namchi' },
+    { name: 'Yuksom', district: 'Gyalshing' },
+    { name: 'Dentam', district: 'Gyalshing' },
+    { name: 'Yangthang', district: 'Soreng' },
+    { name: 'Chongrang', district: 'Soreng' }
+  ],
+  gpus: ['GPU-I', 'GPU-II', 'GPU-III', 'GPU-IV', 'GPU-V', 'GPU-VI'],
+  wards: ['Ward 1', 'Ward 2', 'Ward 3', 'Ward 4', 'Ward 5', 'Ward 6'],
+
   // Disability certificate type — Permanent requires a UDID number; Temporary does not
   certificateTypes: ['Temporary', 'Permanent'],
 
@@ -98,6 +119,10 @@ SDMIS.constants = {
 
   // keys exposed in the Admin → Masters tab (label + which collection drives a form dropdown)
   masterKeys: [
+    { key: 'districts', label: 'Districts' },
+    { key: 'blocks', label: 'Blocks' },
+    { key: 'gpus', label: 'GPUs' },
+    { key: 'wards', label: 'Wards' },
     { key: 'disabilityType', label: 'Disability Types' },
     { key: 'pensionSchemes', label: 'Pension Schemes' },
     { key: 'services', label: 'Services Receiving' },
