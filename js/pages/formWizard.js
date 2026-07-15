@@ -13,7 +13,8 @@ SDMIS.formWizard = (function () {
       step1: {
         surveyDate: new Date().toISOString().slice(0, 10),
         name: '', parentName: '', fatherName: '', motherName: '', dob: '', age: '', gender: '',
-        permanentAddress: '', permSameAsCurrent: 'Yes', address: '', district: '', block: '', gpu: '', ward: '',
+        permanentAddress: '', district: '', block: '', gpu: '', ward: '',
+        permSameAsCurrent: 'Yes', address: '', presentDistrict: '', presentBlock: '', presentGpu: '', presentWard: '',
         houseNo: '', pin: '', contact: '', altMobile: '', altContactName: '', altContactNo: '',
         aadhaar: '', voterId: '', offsprings: [], siblings: [],
         residency: 'local', coiDocType: '', coiDocNo: '', idProofNo: '',
@@ -184,6 +185,22 @@ SDMIS.formWizard = (function () {
       if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
       return opts;
     }
+    // Present (temporary) address is NOT limited to the inspector's mapped blocks —
+    // a beneficiary may currently reside anywhere — so it draws from the full masters.
+    function presentDistrictOpts() {
+      var opts = store.master('districts');
+      var cur = rec.step1.presentDistrict;
+      if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
+      return opts;
+    }
+    function presentBlockOpts(district) {
+      var opts = store.masterItems('blocks')
+        .filter(function (b) { return !district || b.district === district; })
+        .map(function (b) { return b.name; });
+      var cur = rec.step1.presentBlock;
+      if (cur && opts.indexOf(cur) === -1) opts = opts.concat([cur]);
+      return opts;
+    }
 
     function sectionPersonal() {
       var s = rec.step1;
@@ -231,7 +248,17 @@ SDMIS.formWizard = (function () {
           '<label class="pf-l">Is permanent address same as present address?</label>' +
           '<div class="mt-1">' + ui.radioGroup('permSameAsCurrent', C.pensionStatus, s.permSameAsCurrent || 'Yes') + '</div>' +
         '</div>' +
-        pf('Present Address', ui.text('address', s.address), 'address', { req: true, block: true, id: 'present-addr-wrap' }) +
+        // Present address — shown only when it differs; mirrors the permanent-address fields
+        '<div id="present-addr-wrap" class="pf-subsection">' +
+          '<div class="pf-sec pf-sec-sub">Present (Current) Address</div>' +
+          pf('Present Address', ui.text('address', s.address), 'address', { req: true, block: true }) +
+          '<div class="pf-row">' +
+            pf('District', ui.select('presentDistrict', presentDistrictOpts(), s.presentDistrict), 'presentDistrict', { req: true, basis: '1 1 150px' }) +
+            pf('Block', ui.select('presentBlock', presentBlockOpts(s.presentDistrict), s.presentBlock), 'presentBlock', { req: true, basis: '1 1 150px', id: 'present-block-wrap' }) +
+            pf('GPU', ui.select('presentGpu', addrOpts('gpus', s.presentGpu), s.presentGpu), 'presentGpu', { basis: '1 1 150px' }) +
+            pf('Ward', ui.select('presentWard', addrOpts('wards', s.presentWard), s.presentWard), 'presentWard', { basis: '1 1 110px' }) +
+          '</div>' +
+        '</div>' +
 
         '<div class="pf-row">' +
           pf('4. Contact number', ui.text('contact', s.contact, { type: 'tel', attrs: 'inputmode="numeric" maxlength=10' }), 'contact', { req: true, basis: '1 1 200px' }) +
@@ -552,6 +579,19 @@ SDMIS.formWizard = (function () {
         if (cur && opts.indexOf(cur) === -1) $blk.val('');
       });
 
+      // Present District → Present Block cascade
+      $('#sec-1').on('change', '[name=presentDistrict]', function () {
+        var d = $(this).val();
+        var $blk = $('#sec-1 [name=presentBlock]');
+        var cur = $blk.val();
+        var opts = presentBlockOpts(d);
+        var html = '<option value="">-- Select --</option>' + opts.map(function (o) {
+          return '<option value="' + ui.esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + ui.esc(o) + '</option>';
+        }).join('');
+        $blk.html(html);
+        if (cur && opts.indexOf(cur) === -1) $blk.val('');
+      });
+
       // Present address: shown only when it differs from the permanent address
       function refreshPresentAddr() {
         var same = $('#sec-1 [name=permSameAsCurrent]:checked').val() || 'Yes';
@@ -680,7 +720,7 @@ SDMIS.formWizard = (function () {
         var d = ui.collect($body);
         var $enum = $('#wiz-body [name="enumeratorId"]');
         if ($enum.length) rec.enumeratorId = $enum.val() || null;
-        ['surveyDate', 'name', 'fatherName', 'motherName', 'dob', 'age', 'gender', 'permanentAddress', 'permSameAsCurrent', 'address', 'district', 'gpu', 'block', 'ward', 'houseNo', 'pin', 'contact', 'altMobile', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiDocType', 'coiDocNo', 'idProofNo'].forEach(function (k) {
+        ['surveyDate', 'name', 'fatherName', 'motherName', 'dob', 'age', 'gender', 'permanentAddress', 'permSameAsCurrent', 'address', 'district', 'gpu', 'block', 'ward', 'presentDistrict', 'presentBlock', 'presentGpu', 'presentWard', 'houseNo', 'pin', 'contact', 'altMobile', 'aadhaar', 'altContactName', 'altContactNo', 'voterId', 'maritalStatus', 'residency', 'coiDocType', 'coiDocNo', 'idProofNo'].forEach(function (k) {
           if (typeof d[k] !== 'undefined') rec.step1[k] = d[k];
         });
         rec.gpu = rec.step1.gpu; rec.ward = rec.step1.ward;
@@ -759,7 +799,11 @@ SDMIS.formWizard = (function () {
         if (!String(s.district || '').trim()) fail('district', 'Select the district');
         if (!String(s.block || '').trim()) fail('block', 'Select the block');
         if (!String(s.contact || '').trim()) fail('contact');
-        if (s.permSameAsCurrent === 'No' && !String(s.address || '').trim()) fail('address', 'Enter the present address');
+        if (s.permSameAsCurrent === 'No') {
+          if (!String(s.address || '').trim()) fail('address', 'Enter the present address');
+          if (!String(s.presentDistrict || '').trim()) fail('presentDistrict', 'Select the district');
+          if (!String(s.presentBlock || '').trim()) fail('presentBlock', 'Select the block');
+        }
         // soft format check (only when a value is present — the field itself is optional)
         if (s.pin && !/^\d{6}$/.test(s.pin)) fail('pin', 'PIN must be 6 digits');
       } else if (n === 2 || n === 3) {
@@ -874,8 +918,13 @@ SDMIS.formWizard = (function () {
         row('Name', s1.name) + row("Father's Name", s1.fatherName || s1.parentName) + row("Mother's Name", s1.motherName) +
         row('Date of Birth', s1.dob) + row('Age', s1.age) + row('Gender', s1.gender) +
         row('Permanent Address', s1.permanentAddress || s1.address) +
-        row('Present Address', s1.permSameAsCurrent === 'No' ? s1.address : 'Same as permanent address') +
-        row('District', s1.district) + row('Block', s1.block) + row('GPU', s1.gpu) + row('Ward', s1.ward) + row('House No.', s1.houseNo) +
+        row('District', s1.district) + row('Block', s1.block) + row('GPU', s1.gpu) + row('Ward', s1.ward) +
+        row('Present Address', s1.permSameAsCurrent === 'No' ? (s1.address || '—') : 'Same as permanent address') +
+        (s1.permSameAsCurrent === 'No'
+          ? row('Present District', s1.presentDistrict) + row('Present Block', s1.presentBlock) +
+            row('Present GPU', s1.presentGpu) + row('Present Ward', s1.presentWard)
+          : '') +
+        row('House No.', s1.houseNo) +
         row('PIN', s1.pin) + row('Contact', s1.contact) + row('Alternate Mobile', s1.altMobile) +
         row('Aadhaar', s1.aadhaar) + row('Voter ID', s1.voterId) +
         row('Additional Contact', [s1.altContactName, s1.altContactNo].filter(Boolean).join(' / ')) +

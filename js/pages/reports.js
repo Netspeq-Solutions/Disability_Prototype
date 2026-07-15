@@ -9,11 +9,6 @@ SDMIS.router.register('reports', {
     var all = store.all('beneficiaries');
 
     // ---- field accessors ----
-    function distinct(getter) {
-      var set = {};
-      all.forEach(function (r) { var v = getter(r); if (v) set[v] = true; });
-      return Object.keys(set).sort();
-    }
     function disabilityOf(r) {
       return r.formType === 'A' ? (r.step4A && r.step4A.disabilityType) : (r.step4B && r.step4B.suspectedDisabilityType);
     }
@@ -31,6 +26,57 @@ SDMIS.router.register('reports', {
     }
     function districtOf(r) { return (r.step1 && r.step1.district) || '—'; }
     function blockOf(r) { return (r.step1 && r.step1.block) || '—'; }
+    // "Temporary" = beneficiary has a separate present/current address; "Permanent" = same as permanent
+    function addrTypeOf(r) { return (r.step1 && r.step1.permSameAsCurrent === 'No') ? 'Temporary' : 'Permanent'; }
+
+    // ---- address-aware field access (permanent vs present) ----
+    // The Address Type filter decides which address the District/Block/GPU/Ward filters test against.
+    function permField(r, field) {
+      var s = r.step1 || {};
+      if (field === 'gpu') return s.gpu || r.gpu || '';
+      if (field === 'ward') return s.ward || r.ward || '';
+      return s[field] || '';
+    }
+    function presentField(r, field) {
+      var s = r.step1 || {};
+      if (s.permSameAsCurrent !== 'No') return permField(r, field); // present is the same as permanent
+      var m = { district: 'presentDistrict', block: 'presentBlock', gpu: 'presentGpu', ward: 'presentWard' };
+      return s[m[field]] || '';
+    }
+    // mode: 'Permanent' → test permanent only · 'Present' → present only · else (All) → either matches
+    function addrMatches(r, field, value, mode) {
+      if (!value) return true;
+      if (mode === 'Permanent') return permField(r, field) === value;
+      if (mode === 'Present') return presentField(r, field) === value;
+      return permField(r, field) === value || presentField(r, field) === value;
+    }
+    // option list = union of permanent + present distinct values so Present-mode filters have choices
+    function distinctAddr(field) {
+      var set = {};
+      all.forEach(function (r) {
+        var p = permField(r, field); if (p) set[p] = true;
+        var q = presentField(r, field); if (q) set[q] = true;
+      });
+      return Object.keys(set).sort();
+    }
+
+    // Full application detail (read-only) opened from the report list
+    function openApplication(rec) {
+      var body =
+        '<div class="flex items-center gap-2 mb-3">' +
+          (rec.formType === 'A' ? ui.badge('Form A · Certified', 'bg-emerald-100 text-emerald-700') : ui.badge('Form B · Suspected', 'bg-amber-100 text-amber-700')) +
+          ui.statusBadge(rec.status) +
+        '</div>' +
+        SDMIS.formWizard.readOnlyHtml(rec) +
+        '<div class="mt-5 pt-4 border-t">' +
+          '<h4 class="text-sm font-semibold text-indigo-600 mb-3 uppercase tracking-wide">Uploaded Documents</h4>' +
+          '<div id="rep-view-docs">' + SDMIS.formWizard.documentsHtml(rec) + '</div>' +
+        '</div>';
+      ui.modal({ title: rec.step1.name || 'Application', bodyHtml: body, wide: true, hideFooter: true });
+      $('#rep-view-docs').on('click', '.doc-thumb', function () {
+        ui.lightbox(SDMIS.formWizard.recordImages(rec), parseInt($(this).data('idx'), 10) || 0);
+      });
+    }
     function surveyPeriod(id) { var s = id ? store.find('surveys', id) : null; return s ? s.period : '—'; }
 
     function tally(list, getter) {
@@ -140,7 +186,7 @@ SDMIS.router.register('reports', {
           '<div class="bg-white border rounded-xl shadow-sm">' +
             '<div class="px-4 py-3 border-b font-medium text-slate-700 text-sm">Detailed Beneficiary List</div>' +
             '<div class="overflow-x-auto"><table class="w-full"><thead><tr class="text-left text-xs uppercase text-slate-400 border-b">' +
-              '<th class="px-2 py-2">#</th><th class="px-2 py-2">Name</th><th class="px-2 py-2">Form</th><th class="px-2 py-2">Survey</th><th class="px-2 py-2">District</th><th class="px-2 py-2">Block</th><th class="px-2 py-2">Age/Gender</th><th class="px-2 py-2">Disability</th><th class="px-2 py-2">Status</th>' +
+              '<th class="px-2 py-2">#</th><th class="px-2 py-2">Name</th><th class="px-2 py-2">Form</th><th class="px-2 py-2">Survey</th><th class="px-2 py-2">District</th><th class="px-2 py-2">Block</th><th class="px-2 py-2">Age/Gender</th><th class="px-2 py-2">Disability</th><th class="px-2 py-2">Status</th><th class="px-2 py-2 no-print"></th>' +
             '</tr></thead><tbody id="rep-rows"></tbody></table></div>' +
             '<div id="rep-pager" class="no-print"></div>' +
           '</div>' +
@@ -162,9 +208,10 @@ SDMIS.router.register('reports', {
             '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc((r.step1.age || '—') + '/' + (r.step1.gender || '—')) + '</td>' +
             '<td class="px-2 py-1.5 text-sm text-slate-500">' + ui.esc(disabilityOf(r) || '—') + '</td>' +
             '<td class="px-2 py-1.5">' + ui.statusBadge(r.status) + '</td>' +
+            '<td class="px-2 py-1.5 no-print"><button class="view-rec text-xs font-medium text-indigo-600 hover:underline" data-id="' + r.id + '">View</button></td>' +
           '</tr>';
         }).join('');
-        $('#rep-rows').html(rows || '<tr><td colspan="9">' + ui.emptyState('No records match') + '</td></tr>');
+        $('#rep-rows').html(rows || '<tr><td colspan="10">' + ui.emptyState('No records match') + '</td></tr>');
         ui.renderPager($('#rep-pager'), meta, function (p) { page = p; drawTable(); });
       }
       drawTable();
@@ -172,7 +219,9 @@ SDMIS.router.register('reports', {
 
     function exportCsv() {
       if (!lastRows.length) { ui.toast('No records to export', 'warn'); return; }
-      var headers = ['Name', 'Form', 'Survey', 'District', 'Block', 'GPU', 'Ward', 'Age', 'Gender', 'Disability',
+      var headers = ['Name', 'Form', 'Survey', 'District', 'Block', 'GPU', 'Ward',
+        'Address Type', 'Present Address', 'Present District', 'Present Block', 'Present GPU', 'Present Ward',
+        'Age', 'Gender', 'Disability',
         'Certificate Type', 'Valid Till', 'Education', 'Occupation', 'Annual Income', 'House Type', 'Residency',
         'Pension', 'Pension Schemes', 'Services', 'Caregiver', 'Caregiver Type', 'Caregiver Salary/Fee', 'Other Benefits', 'Status', 'Enumerator'];
       var lines = [headers.join(',')];
@@ -181,8 +230,14 @@ SDMIS.router.register('reports', {
         var ens = (creator && creator.enumerators) || [];
         var en = ens.filter(function (e) { return e.id === r.enumeratorId; })[0] || {};
         var s4 = step4Of(r) || {};
+        var diff = r.step1.permSameAsCurrent === 'No';
         var row = [
-          r.step1.name, r.formType, surveyPeriod(r.surveyId), districtOf(r), blockOf(r), r.gpu, r.ward, r.step1.age, r.step1.gender,
+          r.step1.name, r.formType, surveyPeriod(r.surveyId), districtOf(r), blockOf(r), r.gpu, r.ward,
+          addrTypeOf(r),
+          (diff ? (r.step1.address || '') : 'Same as permanent'),
+          (diff ? (r.step1.presentDistrict || '') : ''), (diff ? (r.step1.presentBlock || '') : ''),
+          (diff ? (r.step1.presentGpu || '') : ''), (diff ? (r.step1.presentWard || '') : ''),
+          r.step1.age, r.step1.gender,
           disabilityOf(r),
           (r.formType === 'A' ? (s4.certType || '') : ''), (r.formType === 'A' ? (s4.validTill || '') : ''),
           r.step2.education, r.step2.occupation, r.step2.annualIncome, r.step3.houseType,
@@ -219,6 +274,10 @@ SDMIS.router.register('reports', {
       renderOutput(list, { title: def.name, desc: def.desc, breakdowns: def.breakdowns(list) });
       $('#export-csv').on('click', exportCsv);
       $('#print-pdf').on('click', function () { window.print(); });
+      $c.off('click.repview').on('click.repview', '.view-rec', function () {
+        var rec = store.find('beneficiaries', $(this).data('id'));
+        if (rec) openApplication(rec);
+      });
     }
 
     // ---- main filterable report ----
@@ -236,10 +295,11 @@ SDMIS.router.register('reports', {
           '<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3" id="filter-grid">' +
             fSelect('surveyId', 'Survey', store.all('surveys').map(function (s) { return { value: s.id, label: s.period }; })) +
             fSelect('formType', 'Form Type', [{ value: 'A', label: 'Form A (Certified)' }, { value: 'B', label: 'Form B (Suspected)' }]) +
-            fSelect('district', 'District', distinct(function (r) { return r.step1.district; })) +
-            fSelect('block', 'Block', distinct(function (r) { return r.step1.block; })) +
-            fSelect('gpu', 'GPU', distinct(function (r) { return r.gpu; })) +
-            fSelect('ward', 'Ward', distinct(function (r) { return r.ward; })) +
+            fSelect('addrType', 'Address Type', [{ value: 'Permanent', label: 'Permanent Address' }, { value: 'Present', label: 'Present Address' }]) +
+            fSelect('district', 'District', distinctAddr('district')) +
+            fSelect('block', 'Block', distinctAddr('block')) +
+            fSelect('gpu', 'GPU', distinctAddr('gpu')) +
+            fSelect('ward', 'Ward', distinctAddr('ward')) +
             fSelect('gender', 'Gender', C.gender) +
             fSelect('ageGroup', 'Age Group', C.ageGroups) +
             fSelect('disability', 'Disability Type', store.master('disabilityType')) +
@@ -274,13 +334,14 @@ SDMIS.router.register('reports', {
       }
 
       function applyFilters(f) {
+        var mode = f.addrType || 'All'; // which address the District/Block/GPU/Ward filters test against
         return all.filter(function (r) {
           if (f.surveyId && r.surveyId !== f.surveyId) return false;
           if (f.formType && r.formType !== f.formType) return false;
-          if (f.district && r.step1.district !== f.district) return false;
-          if (f.block && r.step1.block !== f.block) return false;
-          if (f.gpu && r.gpu !== f.gpu) return false;
-          if (f.ward && r.ward !== f.ward) return false;
+          if (!addrMatches(r, 'district', f.district, mode)) return false;
+          if (!addrMatches(r, 'block', f.block, mode)) return false;
+          if (!addrMatches(r, 'gpu', f.gpu, mode)) return false;
+          if (!addrMatches(r, 'ward', f.ward, mode)) return false;
           if (f.gender && r.step1.gender !== f.gender) return false;
           if (f.ageGroup && ageGroupOf(r) !== f.ageGroup) return false;
           if (f.disability && disabilityOf(r) !== f.disability) return false;
@@ -306,6 +367,10 @@ SDMIS.router.register('reports', {
       $('#reset-filters').on('click', function () { $('#filter-grid select').val(''); $('#search-name').val(''); renderOutput(all); });
       $('#export-csv').on('click', exportCsv);
       $('#print-pdf').on('click', function () { window.print(); });
+      $c.off('click.repview').on('click.repview', '.view-rec', function () {
+        var rec = store.find('beneficiaries', $(this).data('id'));
+        if (rec) openApplication(rec);
+      });
 
       renderOutput(all); // initial render with all records
     }

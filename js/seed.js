@@ -236,6 +236,11 @@ SDMIS.seed = (function () {
     var gpu = rand(C.gpus), ward = rand(C.wards);
     var enums = (inspector && inspector.enumerators) || [];
 
+    // ~30% of beneficiaries currently reside somewhere other than their permanent address —
+    // give those a full (possibly out-of-district) present address for demo realism
+    var sameAddr = Math.random() > 0.3;
+    var presentBlock = sameAddr ? { name: block, district: district } : rand(C.blocks);
+
     var rec = {
       id: store.uid('ben'),
       surveyId: surveyId || null,
@@ -258,12 +263,16 @@ SDMIS.seed = (function () {
         age: age,
         gender: gender,
         permanentAddress: 'Near ' + gpu + ', ' + block + ', ' + district,
-        permSameAsCurrent: Math.random() > 0.3 ? 'Yes' : 'No',
-        address: 'Present residence, ' + block,
+        permSameAsCurrent: sameAddr ? 'Yes' : 'No',
+        address: sameAddr ? '' : 'Present residence, ' + presentBlock.name,
         district: district,
         block: block,
         gpu: gpu,
         ward: ward,
+        presentDistrict: sameAddr ? '' : presentBlock.district,
+        presentBlock: sameAddr ? '' : presentBlock.name,
+        presentGpu: sameAddr ? '' : gpu,
+        presentWard: sameAddr ? '' : ward,
         houseNo: 'H-' + ri(1, 120),
         pin: '73710' + ri(1, 9),
         contact: '9' + ri(100000000, 899999999),
@@ -459,7 +468,7 @@ SDMIS.seed = (function () {
       var s1 = r.step1 || {};
       if (typeof s1.fatherName === 'undefined') { s1.fatherName = s1.parentName || ''; changed = true; }
       if (typeof s1.motherName === 'undefined') { s1.motherName = ''; changed = true; }
-      ['dob', 'altMobile', 'block', 'permanentAddress', 'district'].forEach(function (k) { if (typeof s1[k] === 'undefined') { s1[k] = ''; changed = true; } });
+      ['dob', 'altMobile', 'block', 'permanentAddress', 'district', 'presentDistrict', 'presentBlock', 'presentGpu', 'presentWard'].forEach(function (k) { if (typeof s1[k] === 'undefined') { s1[k] = ''; changed = true; } });
       if (typeof s1.permSameAsCurrent === 'undefined') { s1.permSameAsCurrent = 'Yes'; changed = true; }
       // Permanent Address is now the primary address field — backfill it from the old present address
       if (!String(s1.permanentAddress || '').trim() && String(s1.address || '').trim()) { s1.permanentAddress = s1.address; changed = true; }
